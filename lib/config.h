@@ -12,4 +12,5 @@ extern int SO_FILL;
 extern int SO_LOADSPEED;
 extern int SO_DAYS; 
 
+void initializeEnvironment();
 int loadConfig();

@@ -18,6 +18,13 @@ int SO_FILL = 0;
 int SO_LOADSPEED = 0;
 int SO_DAYS = 0; 
 
+/* Initialize some values for the program to work */
+void initializeEnvironment() {
+    srand(time(NULL));
+}
+
+/* Load the configuration file (config.txt) from the root directory of the project.
+Return 0 if the configuration has been loaded succesfully, -1 if some errors occurred. */
 int loadConfig() {
     
     FILE *filePointer;

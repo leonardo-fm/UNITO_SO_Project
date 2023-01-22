@@ -5,6 +5,7 @@
 #include "lib/config.h"
 
 int main(int argx, char* argv[]) {
+    initializeEnvironment();
     if (loadConfig() == -1) {
         return 1;
     }
