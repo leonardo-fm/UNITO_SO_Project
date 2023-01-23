@@ -3,6 +3,9 @@
 #include <unistd.h>     
 
 int main(int argx, char* argv[]) {
-    printf("(PORTO) Hello world!\n");
+    
+    int id = strtol(argv[0], NULL, 10);
+    printf("Given id: %d\n", id);
+
     return 0;
 }

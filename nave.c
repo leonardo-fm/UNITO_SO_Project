@@ -6,12 +6,8 @@
 #include "lib/config.h"
 
 int main(int argx, char* argv[]) {
-    initializeEnvironment();
-    int i = 0;
-    for (i = 0; i < 10; i++) {
-        Coordinates c = getRandomCoordinates(100.0, 100.0);
-        printf("x: %f y: %f\n", c.x, c.y);
-    }
-    
+
+    Coordinates c = getRandomCoordinates(SO_LATO, SO_LATO);
+    printf("Hello from process %d\n", getpid());
     return 0;
 }

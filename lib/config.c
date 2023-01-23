@@ -23,11 +23,16 @@ void initializeEnvironment() {
     srand(time(NULL));
 }
 
-/* Load the configuration file (config.txt) from the root directory of the project.
-Return 0 if the configuration has been loaded succesfully, -1 if some errors occurred. */
+/* Used to clean after the program has crashed or finished */
+void cleanEnvironment() {
+    printf("Put here code to clean\n");
+}
+
+/* Load the configuration file (config.txt) from the root directory of the project. */
+/* Return 0 if the configuration has been loaded succesfully, -1 if some errors occurred. */
 int loadConfig() {
     
-    FILE *filePointer;
+    FILE* filePointer;
     filePointer = fopen("config.txt", "r");
     if (filePointer == NULL) {
         printf("loadingConfig | The file pointer of the config file is null\n");
@@ -43,8 +48,8 @@ int loadConfig() {
             printf("loadingConfig | The fgets() result is null\n");
             return -1;
         }
-        char *configValue;
-        char *endLinePointer;
+        char* configValue;
+        char* endLinePointer;
         /* Adding the char to the pointer to remove the = */
         configValue = memchr(fileLine, '=', strlen(fileLine)) + sizeof(char);
         if (configValue == NULL) {

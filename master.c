@@ -1,13 +1,58 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>     
+#include <unistd.h>   
+#include <signal.h>  
+#include <errno.h>
 
 #include "lib/config.h"
+#include "lib/utilities.h"
+
+void cleanUp (int num) {
+    cleanEnvironment();
+}
 
 int main(int argx, char* argv[]) {
+    signal(SIGINT, cleanUp);
+    signal(SIGTERM, cleanUp);
+
     initializeEnvironment();
     if (loadConfig() == -1) {
         return 1;
+    }
+
+    if (GenerateSubProcesses(SO_PORTI, "./bin/porto") == -1) {
+        return 2;
+    }
+    return 0;
+}
+
+/* Generate processes by forking master and using execve */
+/* Return 0 if the processes has been loaded succesfully, -1 if some errors occurred. */
+int GenerateSubProcesses(int nOfProcess, char* execFilePath) {
+    if(nOfProcess <= 0) {
+        return 0;
+    }
+
+    int i = 0;
+    while (i++ < nOfProcess)
+    {
+        int id = fork();
+        if (id == -1) {
+            printf("Error during fork of the file %s\n", execFilePath);
+            return -1;
+        }
+        if (id == 0) {  
+            char id[12];
+            if (sprintf(id, "%d", i) == -1) {
+                printf("Error during generating id");
+                return -1;
+            }
+            char* arr[] = { id, NULL };
+            if (execve(execFilePath, arr, NULL) == -1) {
+                printf("Error during innesting of the file %s\n", execFilePath);
+                return -1;
+            }
+        } 
     }
 
     return 0;
