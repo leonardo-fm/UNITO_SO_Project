@@ -5,6 +5,7 @@
 
 #include "lib/config.h"
 #include "lib/utilities.h"
+#include "lib/msgPortProtocol.h"
 
 Port port;
 /*Goods supplies[]; TODO 
@@ -20,6 +21,7 @@ int main(int argx, char* argv[]) {
     return 0;
 }
 
+/* Initialize port */
 int initiPort(char* portIdS, char* shareMemoryIdS) {
 
     int portMsgId = msgget(IPC_PRIVATE, 0600);
@@ -42,12 +44,12 @@ int initiPort(char* portIdS, char* shareMemoryIdS) {
     port.availableQuays = port.quays;
 
     int shareMemoryId = strtol(shareMemoryIdS, &p, 10);
-    Port* arr = (Port*) shmat(shareMemoryId, NULL, 0);
+    Coordinates* arr = (Coordinates*) shmat(shareMemoryId, NULL, 0);
     if (arr == (void*) -1) {
         return -1;
     }
 
-    arr[port.id] = port;
+    arr[port.id] = port.position;
 
     return 0;
 }

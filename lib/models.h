@@ -1,60 +1,54 @@
 /* OTHER */
 
-typedef struct coordinates Coordinates;
-struct coordinates {
+typedef struct {
     double x;
     double y;
-};
+}Coordinates;
 
 
 /* GOODS */
 
-enum goodsState { 
+typedef enum { 
     Undefined,
     In_The_Port, 
     In_The_Boat, 
     Delivered, 
     Expired_In_The_Port, 
     Expired_In_The_Boat 
-};
-typedef enum goodsState GoodsState;
+} GoodsState;
 
-struct goods {
+typedef struct {
     int id;
     double loadInTon;
     int lifespan;
     int remaningDays;
     GoodsState state;
-    char* name[12];
-};
-typedef struct goods Goods;
+} Goods;
+
 
 /* BOAT */
 
-enum boatState { 
+typedef enum { 
     In_Port,
     In_Sea
-};
-typedef enum boatState BoatState;
+} BoatState;
 
-struct boat {
+typedef struct {
     int id;
     int speed;
     int capacityInTon;
     Coordinates position;
     BoatState state;
     Goods goods[];
-};
-typedef struct boat Boat;
+} Boat;
 
 
 /* PORT */
 
-typedef struct port Port;
-struct port {
+typedef struct {
     int id;
     int msgQueuId;
     Coordinates position;
     int quays;
     int availableQuays;
-};
+} Port;

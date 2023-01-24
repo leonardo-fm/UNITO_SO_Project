@@ -7,7 +7,8 @@
         "signal.h": "c",
         "config.h": "c",
         "math.h": "c",
-        "shm.h": "c"
+        "shm.h": "c",
+        "string.h": "c"
     },
     "C_Cpp.errorSquiggles": "disabled"
 }

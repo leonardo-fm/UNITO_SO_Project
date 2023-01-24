@@ -8,7 +8,7 @@
 #include "lib/config.h"
 #include "lib/utilities.h"
 
-void cleanUp (int num) {
+void cleanUp(int num) {
 
     cleanEnvironment();
 }
@@ -23,7 +23,7 @@ int main(int argx, char* argv[]) {
         return 1;
     }
 
-    int shareMemoryId = shmget(IPC_PRIVATE, sizeof(Port) * SO_PORTI, 0600);
+    int shareMemoryId = shmget(IPC_PRIVATE, sizeof(Coordinates) * SO_PORTI, 0600);
     if (shareMemoryId == -1) {
         printf("Error during creation of the shared memory");
         return 2;
