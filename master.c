@@ -3,6 +3,7 @@
 #include <unistd.h>   
 #include <signal.h>  
 #include <errno.h>
+#include <sys/shm.h>
 
 #include "lib/config.h"
 #include "lib/utilities.h"
@@ -22,19 +23,25 @@ int main(int argx, char* argv[]) {
         return 1;
     }
 
-    int shareMemoryId = getSharedMemory(sizeof(Coordinates) * SO_PORTI);
+    int shareMemoryId = shmget(IPC_PRIVATE, sizeof(Port) * SO_PORTI, 0600);
+    if (shareMemoryId == -1) {
+        printf("Error during creation of the shared memory");
+        return 2;
+    }
     char shareMemoryIdString[12];
     if (sprintf(shareMemoryIdString, "%d", shareMemoryId) == -1) {
         printf("Error during conversion of the id of shared memory to a string");
-        return 2;
+        return 3;
     }
 
+    /* Generation of "porto" process */
     if (GenerateSubProcesses(SO_PORTI, "./bin/porto", shareMemoryIdString) == -1) {
-        return 3;
+        return 4;
     }
 
+    /* Generation of "nave" process */
     if (GenerateSubProcesses(SO_NAVI, "./bin/nave", shareMemoryIdString) == -1) {
-        return 3;
+        return 5;
     }
 
     return 0;

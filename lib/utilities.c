@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <math.h>
-#include <sys/shm.h>
 
 #include "models.h"
 
@@ -14,14 +13,41 @@ Coordinates getRandomCoordinates(double maxX, double maxY) {
     Coordinates coordinates;
     coordinates.x = (double) rand() / (double) (RAND_MAX / maxX);
     coordinates.y = (double) rand() / (double) (RAND_MAX / maxY);
-    coordinates.msgQueuId = -1;
     return coordinates;
 }
 
-/* The function used to generate a share memory of size sizeOfsm. */
-/* Return the id of the sm >= 0 if the creation was a success, -1 if some errors occurred. */
-int getSharedMemory(int sizeOfsm) {
+/* Generates corner coordinates given the dimensions of a plane. */
+Coordinates getCornerCoordinates(double maxX, double maxY, int num) {
+
+    Coordinates coordinates;
+    switch (num) {
+        case 0:
+            coordinates.x = 0;
+            coordinates.y = 0;
+            break;
+        case 1:
+            coordinates.x = maxX;
+            coordinates.y = 0;
+            break;
+        case 2:
+            coordinates.x = 0;
+            coordinates.y = maxY;
+            break;
+        case 3:
+            coordinates.x = maxX;
+            coordinates.y = maxY;
+            break;
+        default:
+            coordinates.x = -1;
+            coordinates.y = -1;
+            break;
+    }
     
-    int segmentId = shmget(IPC_PRIVATE, sizeOfsm, 0600);
-    return segmentId;
+    return coordinates;
+}
+
+/* return a random value between min and max inclusive */
+int getRandomValue(int min, int max) {
+
+    return (rand() / (RAND_MAX / (max - (min - 1)))) + min;
 }

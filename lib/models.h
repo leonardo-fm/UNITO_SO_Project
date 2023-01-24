@@ -4,7 +4,6 @@ typedef struct coordinates Coordinates;
 struct coordinates {
     double x;
     double y;
-    int msgQueuId;
 };
 
 
@@ -51,21 +50,11 @@ typedef struct boat Boat;
 
 /* PORT */
 
-enum quayState { 
-    Free,
-    Busy
-};
-typedef enum quayState QuayState;
-
-struct quay {
-    QuayState state;
-};
-typedef struct quay Quay;
-
 typedef struct port Port;
 struct port {
+    int id;
+    int msgQueuId;
     Coordinates position;
-    /*Goods supplies[];
-    Goods demands[];*/
-    Quay quays[];
+    int quays;
+    int availableQuays;
 };

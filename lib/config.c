@@ -3,6 +3,7 @@
 #include <unistd.h>   
 #include <string.h>
 #include <errno.h>
+#include <time.h>
 
 int SO_NAVI = 0;
 int SO_PORTI = 0;

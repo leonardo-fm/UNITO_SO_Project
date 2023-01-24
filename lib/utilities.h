@@ -1,5 +1,6 @@
 #include "models.h"
 
-Coordinates getRandomCoordinates();
+Coordinates getRandomCoordinates(double maxX, double maxY);
+Coordinates getCornerCoordinates(double maxX, double maxY, int num);
 
-int getSharedMemory();
+int getRandomValue(int min, int max);

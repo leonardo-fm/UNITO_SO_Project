@@ -5,7 +5,9 @@
         "stdio.h": "c",
         "utilities.h": "c",
         "signal.h": "c",
-        "config.h": "c"
+        "config.h": "c",
+        "math.h": "c",
+        "shm.h": "c"
     },
     "C_Cpp.errorSquiggles": "disabled"
 }

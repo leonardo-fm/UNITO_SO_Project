@@ -6,7 +6,9 @@
 #include "lib/config.h"
 #include "lib/utilities.h"
 
-int currentPortMsgId;
+Port port;
+/*Goods supplies[]; TODO 
+Goods demands[];*/
 
 int main(int argx, char* argv[]) {
     
@@ -20,21 +22,32 @@ int main(int argx, char* argv[]) {
 
 int initiPort(char* portIdS, char* shareMemoryIdS) {
 
-    currentPortMsgId = msgget(IPC_PRIVATE, 0600);
-    if (currentPortMsgId == -1) {
+    int portMsgId = msgget(IPC_PRIVATE, 0600);
+    if (portMsgId == -1) {
         return 1;
     }
 
     char* p;
     int portId = strtol(portIdS, &p, 10);
+
+    port.id = portId;
+    port.msgQueuId = portMsgId;
+    if (port.id < 4) {
+        port.position = getCornerCoordinates(SO_LATO, SO_LATO, port.id);
+    }
+    else {
+        port.position = getRandomCoordinates(SO_LATO, SO_LATO);
+    }
+    port.quays = getRandomValue(4, SO_BANCHINE);
+    port.availableQuays = port.quays;
+
     int shareMemoryId = strtol(shareMemoryIdS, &p, 10);
-    Coordinates* arr = (Coordinates*) shmat(shareMemoryId, NULL, 0);
+    Port* arr = (Port*) shmat(shareMemoryId, NULL, 0);
     if (arr == (void*) -1) {
         return -1;
     }
-    Coordinates currentCoordinates = getRandomCoordinates(SO_LATO, SO_LATO);
-    currentCoordinates.msgQueuId = currentPortMsgId;
-    arr[portId] = currentCoordinates;
+
+    arr[port.id] = port;
 
     return 0;
 }
