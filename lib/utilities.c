@@ -13,6 +13,7 @@ Coordinates getRandomCoordinates(double maxX, double maxY) {
     Coordinates coordinates;
     coordinates.x = (double) rand() / (double) (RAND_MAX / maxX);
     coordinates.y = (double) rand() / (double) (RAND_MAX / maxY);
+    coordinates.msgQueuId = -1;
     return coordinates;
 }
 
