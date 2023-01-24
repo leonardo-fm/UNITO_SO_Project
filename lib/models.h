@@ -1,3 +1,13 @@
+/* OTHER */
+
+typedef struct coordinates Coordinates;
+struct coordinates {
+    double x;
+    double y;
+    int msgQueuId;
+};
+
+
 /* GOODS */
 
 enum goodsState { 
@@ -29,11 +39,12 @@ enum boatState {
 typedef enum boatState BoatState;
 
 struct boat {
+    int id;
     int speed;
     int capacityInTon;
-    Goods goods;
     Coordinates position;
     BoatState state;
+    Goods goods[];
 };
 typedef struct boat Boat;
 

@@ -20,11 +20,13 @@ int SO_DAYS = 0;
 
 /* Initialize some values for the program to work */
 void initializeEnvironment() {
+
     srand(time(NULL));
 }
 
 /* Used to clean after the program has crashed or finished */
 void cleanEnvironment() {
+    
     printf("Running cleaning process\n");
     system("bash killIPCS.sh");
 }

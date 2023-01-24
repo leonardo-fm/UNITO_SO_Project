@@ -1,9 +1,4 @@
-typedef struct coordinates Coordinates;
-struct coordinates {
-    double x;
-    double y;
-    int msgQueuId;
-};
+#include "models.h"
 
 Coordinates getRandomCoordinates();
 

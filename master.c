@@ -8,10 +8,12 @@
 #include "lib/utilities.h"
 
 void cleanUp (int num) {
+
     cleanEnvironment();
 }
 
 int main(int argx, char* argv[]) {
+
     signal(SIGINT, cleanUp);
     signal(SIGTERM, cleanUp);
 
@@ -31,12 +33,17 @@ int main(int argx, char* argv[]) {
         return 3;
     }
 
+    if (GenerateSubProcesses(SO_NAVI, "./bin/nave", shareMemoryIdString) == -1) {
+        return 3;
+    }
+
     return 0;
 }
 
 /* Generate processes by forking master and using execve */
 /* Return 0 if the processes has been loaded succesfully, -1 if some errors occurred. */
 int GenerateSubProcesses(int nOfProcess, char* execFilePath, char shareMemoryId[]) {
+
     if(nOfProcess <= 0) {
         return 0;
     }
