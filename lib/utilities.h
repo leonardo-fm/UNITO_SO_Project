@@ -4,4 +4,6 @@ struct coordinates {
     double y;
 };
 
-Coordinates getRandomCoordinates(double maxX, double maxY);
+Coordinates getRandomCoordinates();
+
+int getSharedMemory();

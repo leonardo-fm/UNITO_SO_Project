@@ -3,7 +3,9 @@
         "stdlib.h": "c",
         "unistd.h": "c",
         "stdio.h": "c",
-        "utilities.h": "c"
+        "utilities.h": "c",
+        "signal.h": "c",
+        "config.h": "c"
     },
     "C_Cpp.errorSquiggles": "disabled"
 }

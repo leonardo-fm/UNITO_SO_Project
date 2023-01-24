@@ -25,7 +25,8 @@ void initializeEnvironment() {
 
 /* Used to clean after the program has crashed or finished */
 void cleanEnvironment() {
-    printf("Put here code to clean\n");
+    printf("Running cleaning process\n");
+    system("bash killIPCS.sh");
 }
 
 /* Load the configuration file (config.txt) from the root directory of the project. */
@@ -49,14 +50,14 @@ int loadConfig() {
             return -1;
         }
         char* configValue;
-        char* endLinePointer;
+        char* p;
         /* Adding the char to the pointer to remove the = */
         configValue = memchr(fileLine, '=', strlen(fileLine)) + sizeof(char);
         if (configValue == NULL) {
             printf("loadingConfig | Not found config value\n");
             return -1;
         }
-        configValues[i++] = strtol(configValue, &endLinePointer, 10);
+        configValues[i++] = strtol(configValue, &p, 10);
     }
 
     fclose(filePointer);
