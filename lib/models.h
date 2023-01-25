@@ -25,6 +25,10 @@ typedef struct {
     GoodsState state;
 } Goods;
 
+typedef struct {
+    int** exchange;
+} GoodExchange;
+
 
 /* BOAT */
 
