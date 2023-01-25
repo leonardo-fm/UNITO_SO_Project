@@ -27,12 +27,13 @@ int main(int argx, char* argv[]) {
 
     if (initializePort(argv[1], argv[2], argv[3]) == -1) {
         printf("Initialization of port %s failed\n", argv[1]);
-        exit(1);
+        exit(2);
     }
 
     return 0;
 }
 
+/* Recover the array of the configurations values */
 int initializeConfig(char* configShareMemoryIdString) {
 
     char* p;
@@ -67,6 +68,7 @@ int initializePort(char* portIdString, char* portShareMemoryIdS, char* goodShare
 
 int initializePortStruct(char* portIdString, char* portShareMemoryIdS) {
     
+    /* Generate a message queue to comunicate with the boats */
     int portMsgId = msgget(IPC_PRIVATE, 0600);
     if (portMsgId == -1) {
         return -1;
@@ -98,23 +100,23 @@ int initializePortStruct(char* portIdString, char* portShareMemoryIdS) {
 
 int initializeExchangeGoods() {
 
-    int maxRequest = configArr[SO_FILL] / configArr[SO_MERCI] / configArr[SO_PORTI];
     int i = 0;
 
     goodExchange.exchange = malloc(2 * sizeof(int*));
     if (goodExchange.exchange == NULL) {
-        printf("Error during initialize exchange\n");
+        printf("Error during initialize exchange 0\n");
         return -1;
     }
 
     for (i = 0; i < 2; i++) {
         goodExchange.exchange[i] = malloc(sizeof(int) * configArr[SO_MERCI]);
         if (goodExchange.exchange[i] == NULL) {
-            printf("Error during initialize exchange\n");
+            printf("Error during initialize exchange 1\n");
             return -1;
         }
     }
 
+    int maxRequest = (configArr[SO_FILL] / 2) / configArr[SO_MERCI] / configArr[SO_PORTI];
     for (i = 0; i < configArr[SO_MERCI]; i++) {
         goodExchange.exchange[0][i] = 0;
         goodExchange.exchange[1][i] = maxRequest;
@@ -131,7 +133,7 @@ int initializePortGoods(char* goodShareMemoryIdS) {
 
     sem_t *semaphore = sem_open(semaphoreKey, O_EXCL, 0600, 1);
     if (semaphore == SEM_FAILED) {
-        printf("Error semaphore opening\n");
+        printf("port failed to found semaphore with key %s\n", semaphoreKey);
         return -1;
     }
 
@@ -190,7 +192,7 @@ int initializePortGoods(char* goodShareMemoryIdS) {
     sem_post(semaphore);
 
     if (sem_close(semaphore) < 0) {
-        printf("Error unable to close the semaphore\n");
+        printf("Error unable to close the good semaphore\n");
         return -1;
     }
 

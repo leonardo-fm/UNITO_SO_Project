@@ -26,50 +26,49 @@ int main(int argx, char* argv[]) {
     signal(SIGINT, cleanUp);
     signal(SIGTERM, cleanUp);
 
+    /* ----- CONFIG ----- */
     int configShareMemoryId = generateShareMemory(sizeof(int) * NUM_OF_SETTINGS);
     if (configShareMemoryId == -1) {
         printf("Error during creation of shared memory for config\n");
         exit(1);
     }
 
-    initializeEnvironment();
-    if (loadConfig(configShareMemoryId) == -1) {
+    configArr = (int*) shmat(configShareMemoryId, NULL, 0);
+    if (configArr == (void*) -1) {
         exit(2);
     }
 
-    configArr = (int*) shmat(configShareMemoryId, NULL, 0);
-    if (configArr == (void*) -1) {
-        exit(7);
-    }
-
-    int portShareMemoryId = generateShareMemory(sizeof(Coordinates) * configArr[SO_PORTI]);
-    if (portShareMemoryId == -1) {
-        printf("Error during creation of shared memory for ports\n");
+    initializeEnvironment();
+    if (loadConfig(configShareMemoryId) == -1) {
         exit(3);
     }
 
+
+    /* ----- GOODS ----- */
     int goodShareMemoryId = generateShareMemory(sizeof(Goods) * configArr[SO_MERCI]);
     if (goodShareMemoryId == -1) {
         printf("Error during creation of shared memory for goods\n");
         exit(4);
     }
 
-    /* Init of goods */
-    if (generateGoods(goodShareMemoryId) == -1) {
-        exit(9);
-    }
-
-    /* Init of semaphore */
-    if (generateSemaphore() == -1) {
-        exit(8);
-    }
-
-    /* Generation of semapore for goods init */
-    if (generateSubProcesses(configArr[SO_PORTI], "./bin/porto", configShareMemoryId, portShareMemoryId, goodShareMemoryId) == -1) {
+    if (initializeGoods(goodShareMemoryId) == -1) {
         exit(5);
     }
 
-    /* Generation of "nave" process */
+
+    /* ----- PORTS ----- */
+    int portShareMemoryId = generateShareMemory(sizeof(Coordinates) * configArr[SO_PORTI]);
+    if (portShareMemoryId == -1) {
+        printf("Error during creation of shared memory for ports\n");
+        exit(6);
+    }
+
+    if (generateSubProcesses(configArr[SO_PORTI], "./bin/porto", configShareMemoryId, portShareMemoryId, goodShareMemoryId) == -1) {
+        exit(7);
+    }
+
+
+    /* ----- PORTS ----- */
     if (generateSubProcesses(configArr[SO_NAVI], "./bin/nave", configShareMemoryId, portShareMemoryId, 0) == -1) {
         exit(6);
     }
@@ -145,11 +144,25 @@ int generateSubProcesses(int nOfProcess, char* execFilePath, int configShareMemo
     return 0;
 }
 
+int initializeGoods(int goodShareMemoryId) {
+
+    /* Init of goods */
+    if (generateGoods(goodShareMemoryId) == -1) {
+        return -1;
+    }
+
+    /* Init of semaphore */
+    if (generateSemaphore() == -1) {
+        return -1;
+    }
+}
+
+/* Generate all the goods requested and initialize them */
 int generateGoods(int goodShareMemoryId) {
 
     Goods* arr = (Goods*) shmat(goodShareMemoryId, NULL, 0);
     if (arr == (void*) -1) {
-        printf("Error during good initialization\n");
+        printf("Error during good memory allocation\n");
         return -1;
     }
 
@@ -182,12 +195,12 @@ int generateSemaphore() {
 
     sem_t* semaphore = sem_open(semaphoreKey, O_CREAT, 0600, 1);
     if (semaphore == SEM_FAILED) {
-        printf("Error semaphore opening\n");
+        printf("Error on opening the semaphore\n");
         return -1;
     }
 
     if (sem_close(semaphore) < 0) {
-        printf("Error unable to close the semaphore\n");
+        printf("Error on closing the semaphore\n");
         return -1;
     }
 
