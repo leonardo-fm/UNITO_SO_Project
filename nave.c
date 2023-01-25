@@ -44,6 +44,12 @@ int openComunication(int portId) {
     }
 
     currentMsgQueueId = msgget((key_t) portId, IPC_CREAT | 0600);
+    if (sendMessage(currentMsgQueueId, boat.id, PA_ACCEPT, 0, 0) == -1) {
+        printf("Failed to send ACCEPT comunication");
+        return -1;
+    }
+
+    /* TODO Aspettare risposta e sapere se andare in dialougue() oppure nela FIFO */
 
     return 0;
 }
@@ -55,6 +61,12 @@ int dialogue() {
 
 int closeComunication() {
 
+    if (sendMessage(currentMsgQueueId, boat.id, PA_EOT, 0, 0) == -1) {
+        printf("Failed to send EOT comunication");
+        return -1;
+    }
+
     currentMsgQueueId = -1;
+
     return 0;
 }
