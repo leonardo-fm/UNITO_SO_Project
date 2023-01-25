@@ -8,7 +8,7 @@
 #include "lib/msgPortProtocol.h"
 
 int sharedMemoryPointer; 
-int currentMsgQueuId;
+int currentMsgQueueId;
 Boat boat;
 
 int main(int argx, char* argv[]) {
@@ -38,12 +38,12 @@ int initBoat(char* boatIdS, char* shareMemoryIdS) {
 
 int openComunication(int portId) {
 
-    if (currentMsgQueuId != -1) {
-        printf("The old comunication with id %d was not closed properly\n", currentMsgQueuId);
+    if (currentMsgQueueId != -1) {
+        printf("The old comunication with id %d was not closed properly\n", currentMsgQueueId);
         return -1;
     }
 
-    currentMsgQueuId = msgget((key_t) portId, IPC_CREAT | 0600);
+    currentMsgQueueId = msgget((key_t) portId, IPC_CREAT | 0600);
 
     return 0;
 }
@@ -55,6 +55,6 @@ int dialogue() {
 
 int closeComunication() {
 
-    currentMsgQueuId = -1;
+    currentMsgQueueId = -1;
     return 0;
 }

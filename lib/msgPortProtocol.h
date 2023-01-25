@@ -14,14 +14,16 @@ typedef enum {
 typedef struct {
     long int msgType;
     union {
-        char msg[sizeof(int) * 3];
+        char msg[sizeof(int) * 4];
         struct {
             int id;
             ProtocolActions action;
+            int goodId;
             int quantity;
         } data;
     } msg;
 } PortMessage;
 
-int sendMessage(int msgQueueId, int boatId, ProtocolActions action, int quantity);
-PortMessage reciveMessage(int boatId); 
+int sendMessage(int msgQueueId, int boatId, ProtocolActions action, int goodId, int quantity);
+int reciveMessageById(int msgQueueId, int boatId, PortMessage* pMsg); 
+int reciveMessage(int msgQueueId, PortMessage* pMsg); 
