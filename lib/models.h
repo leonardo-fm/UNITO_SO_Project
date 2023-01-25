@@ -3,8 +3,23 @@
 typedef struct {
     double x;
     double y;
-}Coordinates;
+} Coordinates;
 
+typedef enum {
+    SO_NAVI,
+    SO_PORTI,
+    SO_MERCI,
+    SO_SIZE,
+    SO_MIN_VITA,
+    SO_MAX_VITA,
+    SO_LATO,
+    SO_SPEED,
+    S0_CAPACITY,
+    SO_BANCHINE,
+    SO_FILL,
+    SO_LOADSPEED,
+    SO_DAYS, 
+} ConfigurationVariables;
 
 /* GOODS */
 
@@ -19,7 +34,7 @@ typedef enum {
 
 typedef struct {
     int id;
-    double loadInTon;
+    int loadInTon;
     int lifespan;
     int remaningDays;
     GoodsState state;

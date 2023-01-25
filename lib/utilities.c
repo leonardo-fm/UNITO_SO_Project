@@ -5,6 +5,12 @@
 
 #include "models.h"
 
+/* Initialize some values for the program to work */
+void initializeEnvironment() {
+
+    srand(getpid());
+}
+
 /* Generates coordinates given the dimensions of a plane. */
 /* The function used to generate the random values has been taken from: */
 /* https://stackoverflow.com/questions/13408990/how-to-generate-random-float-number-in-c */

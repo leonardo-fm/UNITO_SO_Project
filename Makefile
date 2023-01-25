@@ -1,6 +1,6 @@
 build: master nave porto
 
-run: master nave porto
+run: build
 	./bin/master
 
 master: master.c
