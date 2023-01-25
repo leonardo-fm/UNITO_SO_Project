@@ -42,8 +42,7 @@ int reciveMessageById(int msgQueueId, int boatId, PortMessage* pMsg) {
     if (pMsg->msg.data.id != boatId) {
         pMsg = NULL;
         return -2;
-    }
-    else {
+    } else {
         msgctl(msgQueueId, IPC_RMID, 0);
         return 0;
     }
@@ -62,8 +61,7 @@ int reciveMessage(int msgQueueId, PortMessage* pMsg) {
 
     if (strlen(pMsg->msg.msg) != MAX_BUFFER_PORT_MSG) {
         return -2;
-    }
-    else {
+    } else {
         msgctl(msgQueueId, IPC_RMID, 0);
         return 0;
     }

@@ -25,6 +25,7 @@ typedef struct {
     GoodsState state;
 } Goods;
 
+/* [n][0] = In stock, [n][1] = Request */
 typedef struct {
     int** exchange;
 } GoodExchange;
