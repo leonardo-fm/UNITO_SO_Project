@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <unistd.h>   
 #include <sys/shm.h>  
+#include <sys/msg.h>
 
 #include <semaphore.h>
 #include <fcntl.h>      
@@ -17,7 +18,7 @@ Port port;
 GoodExchange goodExchange;
 
 int main(int argx, char* argv[]) {
-    
+
     initializeEnvironment();
 
     if (initializeConfig(argv[0]) == -1) {
@@ -28,6 +29,11 @@ int main(int argx, char* argv[]) {
     if (initializePort(argv[1], argv[2], argv[3]) == -1) {
         printf("Initialization of port %s failed\n", argv[1]);
         exit(2);
+    }
+
+    if (cleanup() == -1) {
+        printf("Cleanup failed\n");
+        exit(3);
     }
 
     return 0;
@@ -197,4 +203,12 @@ int initializePortGoods(char* goodShareMemoryIdS) {
     }
 
     return 0;
+}
+
+int cleanup() {
+    
+    if (msgctl(port.msgQueuId, IPC_RMID, NULL) == -1) {
+        printf("The queue failed to be closed\n");
+        return -1;
+    }
 }

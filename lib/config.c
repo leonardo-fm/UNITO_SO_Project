@@ -8,13 +8,6 @@
 
 #include "models.h"
 
-/* Used to clean after the program has crashed or finished */
-void cleanEnvironment() {
-    
-    printf("Running cleaning process\n");
-    system("bash killIPCS.sh");
-}
-
 /* Load the configuration file (config.txt) from the root directory of the project. */
 /* Return 0 if the configuration has been loaded succesfully, -1 if some errors occurred. */
 int loadConfig(int configShareMemoryId) {

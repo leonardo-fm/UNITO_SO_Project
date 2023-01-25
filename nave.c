@@ -28,6 +28,11 @@ int main(int argx, char* argv[]) {
         exit(2);
     }
 
+    if (cleanup() == -1) {
+        printf("Cleanup failed\n");
+        exit(3);
+    }
+
     return 0;
 }
 
@@ -89,5 +94,10 @@ int closeComunication() {
 
     currentMsgQueueId = -1;
 
+    return 0;
+}
+
+int cleanup() {
+    
     return 0;
 }

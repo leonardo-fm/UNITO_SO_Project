@@ -16,15 +16,7 @@
 int NUM_OF_SETTINGS = 13;
 int* configArr;
 
-void cleanUp(int num) {
-
-    cleanEnvironment();
-}
-
 int main(int argx, char* argv[]) {
-
-    signal(SIGINT, cleanUp);
-    signal(SIGTERM, cleanUp);
 
     /* ----- CONFIG ----- */
     int configShareMemoryId = generateShareMemory(sizeof(int) * NUM_OF_SETTINGS);
@@ -70,11 +62,18 @@ int main(int argx, char* argv[]) {
 
     /* ----- PORTS ----- */
     if (generateSubProcesses(configArr[SO_NAVI], "./bin/nave", configShareMemoryId, portShareMemoryId, 0) == -1) {
-        exit(6);
+        exit(8);
     }
  
     /* Avoid semaphore error creation */
     sleep(1);
+
+    /* Array of pointers of shared memory segment */
+    int arrOfPointerId[] = {configShareMemoryId, goodShareMemoryId, portShareMemoryId}; 
+    if (cleanup(arrOfPointerId, sizeof(arrOfPointerId) / sizeof(int)) == -1) {
+        printf("Cleanup failed\n");
+        exit(9);
+    }
 
     return 0;
 }
@@ -205,4 +204,14 @@ int generateSemaphore() {
     }
 
     return 0;
+}
+
+int cleanup(int pointerIdArr[], int size) {
+    int i = 0;
+    for (i = 0; i < size; i++) {
+        if (shmctl(pointerIdArr[i], IPC_RMID, NULL) == -1) {
+            printf("The shared memory failed to be closed\n");
+            return -1;
+        }
+    }
 }
