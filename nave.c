@@ -13,6 +13,7 @@ int* configArr;
 int sharedMemoryPointer; 
 int currentMsgQueueId;
 Boat boat;
+Goods* goodHold;
 
 int main(int argx, char* argv[]) {
 
@@ -58,6 +59,23 @@ int initializeBoat(char* boatIdS, char* shareMemoryIdS) {
     boat.state = In_Sea;
 
     sharedMemoryPointer = strtol(shareMemoryIdS, &p, 10);
+
+    /* Initialization of the hold */
+    goodHold = malloc(sizeof(Goods) * configArr[SO_MERCI]);
+    if (goodHold == NULL) {
+        printf("Error during malloc of boat hold\n");
+        return -1;
+    }
+
+    int i = 0;
+    for (i = 0; i < configArr[SO_MERCI]; i++) {
+        Goods emptyGood;
+        emptyGood.id = i;
+        emptyGood.loadInTon = 0;
+        emptyGood.state = In_The_Boat;
+
+        goodHold[i] = emptyGood;
+    }
     
     return 0;
 }
@@ -80,7 +98,19 @@ int openComunication(int portId) {
     return 0;
 }
 
-int dialogue() {
+int trade() {
+
+    int treading = 1;
+    
+    while (treading == 1) {
+        if (haveIGoodsToSell() == 0) {
+            /* Sell goods */
+
+        } else {
+            /* Buy goods */
+
+        }
+    }
 
     return 0;
 }
@@ -95,6 +125,19 @@ int closeComunication() {
     currentMsgQueueId = -1;
 
     return 0;
+}
+
+/* Return 0 if there are goods in the boat available for sale, otherwise -1 */
+int haveIGoodsToSell() {
+    
+    int i = 0;
+    for (i = 0; i < configArr[SO_MERCI]; i++) {
+        if (goodHold[i].loadInTon > 0 ) {
+            return 0;
+        }    
+    }
+
+    return -1;
 }
 
 int cleanup() {

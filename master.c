@@ -60,7 +60,7 @@ int main(int argx, char* argv[]) {
     }
 
 
-    /* ----- PORTS ----- */
+    /* ----- BOATS ----- */
     if (generateSubProcesses(configArr[SO_NAVI], "./bin/nave", configShareMemoryId, portShareMemoryId, 0) == -1) {
         exit(8);
     }
@@ -172,9 +172,7 @@ int generateGoods(int goodShareMemoryId) {
         good.id = i;
         good.loadInTon = goodQuantity;
         good.state = Undefined;
-        int lifeSpan = getRandomValue(configArr[SO_MIN_VITA], configArr[SO_MAX_VITA]);
-        good.lifespan = lifeSpan;
-        good.remaningDays = lifeSpan;
+        good.remaningDays = getRandomValue(configArr[SO_MIN_VITA], configArr[SO_MAX_VITA]);
 
         arr[i] = good;
     }

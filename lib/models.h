@@ -35,15 +35,9 @@ typedef enum {
 typedef struct {
     int id;
     int loadInTon;
-    int lifespan;
     int remaningDays;
     GoodsState state;
 } Goods;
-
-/* [n][0] = In stock, [n][1] = Request */
-typedef struct {
-    int** exchange;
-} GoodExchange;
 
 
 /* BOAT */
@@ -59,7 +53,6 @@ typedef struct {
     int capacityInTon;
     Coordinates position;
     BoatState state;
-    Goods goods[];
 } Boat;
 
 

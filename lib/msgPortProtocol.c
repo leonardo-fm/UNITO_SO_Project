@@ -11,14 +11,14 @@
 int MAX_BUFFER_PORT_MSG = sizeof(int) * 4;
 
 /* Send a message to the queue, eturn 0 if ok otherwise -1 */
-int sendMessage(int msgQueueId, int boatId, ProtocolActions action, int goodId, int quantity) {
+int sendMessage(int msgQueueId, int boatId, ProtocolActions action, int sharedMemoryId, int semaphoreKey) {
     
     PortMessage pMsg;
     pMsg.msgType = 1;
     pMsg.msg.data.id = boatId;
     pMsg.msg.data.action = action;
-    pMsg.msg.data.goodId = goodId;
-    pMsg.msg.data.quantity = quantity;
+    pMsg.msg.data.sharedMemoryId = sharedMemoryId;
+    pMsg.msg.data.semaphoreKey = semaphoreKey;
 
     if (msgsnd(msgQueueId, &pMsg, MAX_BUFFER_PORT_MSG, 0) == -1) {
         printf("Error during sending of the message");
