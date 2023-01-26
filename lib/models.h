@@ -1,3 +1,5 @@
+#include <time.h>
+
 /* OTHER */
 
 typedef struct {
@@ -20,6 +22,11 @@ typedef enum {
     SO_LOADSPEED,
     SO_DAYS, 
 } ConfigurationVariables;
+
+typedef struct {
+    time_t tv_sec;        /* seconds */
+    long   tv_nsec;       /* nanoseconds */
+} timespec;
 
 /* GOODS */
 

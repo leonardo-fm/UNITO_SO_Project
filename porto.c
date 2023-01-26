@@ -1,3 +1,4 @@
+#define _GNU_SOURCES
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>   
@@ -354,6 +355,16 @@ int cleanup() {
     
     if (msgctl(port.msgQueuId, IPC_RMID, NULL) == -1) {
         printf("The queue failed to be closed\n");
+        return -1;
+    }
+
+    if (shmctl(goodStockShareMemoryId, IPC_RMID, NULL) == -1) {
+        printf("The shared memory failed to be closed\n");
+        return -1;
+    }
+
+    if (shmctl(goodRequestShareMemoryId, IPC_RMID, NULL) == -1) {
+        printf("The shared memory failed to be closed\n");
         return -1;
     }
 }

@@ -1,3 +1,4 @@
+#define _GNU_SOURCES
 #include <stdio.h>
 #include <stdlib.h>
 

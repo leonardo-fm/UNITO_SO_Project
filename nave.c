@@ -3,6 +3,11 @@
 #include <unistd.h>    
 #include <sys/shm.h>   
 
+#include <semaphore.h>
+#include <fcntl.h>      
+
+#include <time.h>
+
 #include "lib/utilities.h"
 #include "lib/config.h"
 #include "lib/msgPortProtocol.h"
@@ -79,8 +84,8 @@ int initializeBoat(char* boatIdS, char* shareMemoryIdS) {
     
     return 0;
 }
-
-int openComunication(int portId) {
+ /* Return 0 if the trade is a success, 1 if the port refuse to accept the boat, -1 for errors */
+int openTrade(int portId) {
 
     if (currentMsgQueueId != -1) {
         printf("The old comunication with id %d was not closed properly\n", currentMsgQueueId);
@@ -88,34 +93,65 @@ int openComunication(int portId) {
     }
 
     currentMsgQueueId = msgget((key_t) portId, IPC_CREAT | 0600);
+
     if (sendMessage(currentMsgQueueId, boat.id, PA_ACCEPT, 0, 0) == -1) {
         printf("Failed to send ACCEPT comunication\n");
         return -1;
     }
 
-    /* TODO Aspettare risposta e sapere se andare in dialougue() oppure nela FIFO */
+    int waitResponse = 1;
+    PortMessage* response;
+    while (waitResponse == 1) {
+        
+        int msgResponse = reciveMessageById(currentMsgQueueId, boat.id, response);
+        if (msgResponse == -1) {
+            printf("Error during weating response from ACCEPT\n");
+            return -1;
+        }
+
+        if (msgResponse == 0) {
+            waitResponse = 0;
+        }
+    }
+    
+    if (response->msg.data.action == PA_N) {
+        return 1;
+    }
+    
+    if (trade() == -1) {
+        printf("Error during trade\n");
+        return -1;
+    }
 
     return 0;
 }
 
 int trade() {
 
-    int treading = 1;
-    
-    while (treading == 1) {
-        if (haveIGoodsToSell() == 0) {
-            /* Sell goods */
-
-        } else {
-            /* Buy goods */
-
+    if (haveIGoodsToSell() == 0) {
+        
+        if (sellGoods() == -1) {
+            printf("Error during selling goods\n");
+            return -1;
         }
+    }
+
+    if (haveIGoodsToBuy() == 0) {
+        if (buyGoods() == -1) {
+            printf("Error during buying goods\n");
+            return -1;
+        }
+    }   
+
+    if (closeTrade() == -1) {
+        printf("Error during closing trade\n");
+        return -1;
     }
 
     return 0;
 }
 
-int closeComunication() {
+int closeTrade() {
 
     if (sendMessage(currentMsgQueueId, boat.id, PA_EOT, 0, 0) == -1) {
         printf("Failed to send EOT comunication\n");
@@ -140,7 +176,226 @@ int haveIGoodsToSell() {
     return -1;
 }
 
-int cleanup() {
+/* Return 0 if there are space available in the hold, otherwise -1 */
+int haveIGoodsToBuy() {
     
+    int i = 0;
+    int totalNumOfTons = 0;
+    for (i = 0; i < configArr[SO_MERCI]; i++) {
+        totalNumOfTons += goodHold[i].loadInTon;   
+    }
+
+    if (totalNumOfTons < boat.capacityInTon) {
+        return 0;
+    } else {
+        return -1;
+    }
+}
+
+int sellGoods() {
+
+    /* Send request to sell */
+    if (sendMessage(currentMsgQueueId, boat.id, PA_SE_GOOD, 0, 0) == -1) {
+        printf("Failed to send PA_SE_GOOD comunication\n");
+        return -1;
+    }
+
+    /* Wait response */
+    int waitResponse = 1;
+    PortMessage* response;
+    while (waitResponse == 1) {
+        
+        int msgResponse = reciveMessageById(currentMsgQueueId, boat.id, response);
+        if (msgResponse == -1) {
+            printf("Error during weating response from PA_SE_GOOD\n");
+            return -1;
+        }
+
+        if (msgResponse == 0) {
+            waitResponse = 0;
+        }
+    }
+
+    if (response->msg.data.action == PA_N) {
+        return 0;
+    }
+
+    /* Get semaphore */
+    char semaphoreKey[12];
+    if (sprintf(semaphoreKey, "%d", response->msg.data.semaphoreKey) == -1) {
+        printf("Error during conversion of the pid for semaphore to a string\n");
+        return -1;
+    }   
+
+    sem_t *semaphore = sem_open(semaphoreKey, O_EXCL, 0600, 1);
+    if (semaphore == SEM_FAILED) {
+        printf("Boat failed to found semaphore with key %s\n", semaphoreKey);
+        return -1;
+    }
+
+    /* Get shared memory of the port */
+    Goods* arr = (Goods*) shmat(response->msg.data.sharedMemoryId, NULL, 0);
+    if (arr == (void*) -1) {
+        printf("Error opening goods shared memory\n");
+        return -1;
+    }
+
+    /* Sell all available goods */
+    int i = 0;
+    for (i = 0; i < configArr[SO_MERCI]; i++) {
+        if (goodHold[i].loadInTon > 0) {
+            
+            if (arr[i].loadInTon == 0) {
+                continue;
+            }
+            
+            sem_wait(semaphore);
+
+            int exchange = 0;
+
+            /* If x >= 0 OK, x < 0 not enought good to sell */
+            if (arr[i].loadInTon - goodHold[i].loadInTon >= 0) {
+                exchange = goodHold[i].loadInTon;
+                arr[i].loadInTon -= goodHold[i].loadInTon;
+                goodHold[i].loadInTon = 0;
+            } else {
+                exchange = goodHold[i].loadInTon - arr[i].loadInTon;
+                arr[i].loadInTon = 0;
+                goodHold[i].loadInTon -= exchange;
+            }
+
+            sem_post(semaphore);
+
+            if(waitExchange(exchange / configArr[SO_LOADSPEED]) == -1) {
+                printf("Error in start nanosleep\n");
+                return -1;
+            }
+        }    
+    }
+
+    if (sem_close(semaphore) < 0) {
+        printf("Error unable to close the good semaphore\n");
+        return -1;
+    }
+
+    return 0;
+}
+
+int buyGoods() {
+
+    /* Send request to buy */
+    if (sendMessage(currentMsgQueueId, boat.id, PA_RQ_GOOD, 0, 0) == -1) {
+        printf("Failed to send PA_RQ_GOOD comunication\n");
+        return -1;
+    }
+
+    /* Wait response */
+    int waitResponse = 1;
+    PortMessage* response;
+    while (waitResponse == 1) {
+        
+        int msgResponse = reciveMessageById(currentMsgQueueId, boat.id, response);
+        if (msgResponse == -1) {
+            printf("Error during weating response from PA_RQ_GOOD\n");
+            return -1;
+        }
+
+        if (msgResponse == 0) {
+            waitResponse = 0;
+        }
+    }
+
+    if (response->msg.data.action == PA_N) {
+        return 0;
+    }
+
+    /* Get semaphore */
+    char semaphoreKey[12];
+    if (sprintf(semaphoreKey, "%d", response->msg.data.semaphoreKey) == -1) {
+        printf("Error during conversion of the pid for semaphore to a string\n");
+        return -1;
+    }   
+
+    sem_t *semaphore = sem_open(semaphoreKey, O_EXCL, 0600, 1);
+    if (semaphore == SEM_FAILED) {
+        printf("Boat failed to found semaphore with key %s\n", semaphoreKey);
+        return -1;
+    }
+
+    /* Get shared memory of the port */
+    Goods* arr = (Goods*) shmat(response->msg.data.sharedMemoryId, NULL, 0);
+    if (arr == (void*) -1) {
+        printf("Error opening goods shared memory\n");
+        return -1;
+    }
+
+    /* Buy some available goods */
+    int i = 0;
+    for (i = 0; i < configArr[SO_MERCI]; i++) {
+        if (arr[i].loadInTon > 0) {
+            
+            sem_wait(semaphore);
+
+            int availableSpace = getSpaceAvailableInTheHold();
+            int exchange = 0;
+
+            /* If x >= 0 OK, x < 0 not enought good to buy */
+            if (arr[i].loadInTon - availableSpace >= 0) {
+                exchange = availableSpace;
+                arr[i].loadInTon -= availableSpace;
+                goodHold[i].loadInTon += availableSpace;
+            } else {
+                exchange = availableSpace - arr[i].loadInTon;
+                arr[i].loadInTon = 0;
+                goodHold[i].loadInTon += exchange;
+            }
+
+            sem_post(semaphore);
+
+            if(waitExchange(exchange / configArr[SO_LOADSPEED]) == -1) {
+                printf("Error in start nanosleep\n");
+                return -1;
+            }
+            
+            if (getSpaceAvailableInTheHold() == 0) {
+                break;
+            }
+        }    
+    }
+
+    if (sem_close(semaphore) < 0) {
+        printf("Error unable to close the good semaphore\n");
+        return -1;
+    }
+    
+    return 0;
+}
+
+int waitExchange(int timeToSleep) {
+
+    timespec tim;
+    tim.tv_sec = 0;
+    tim.tv_nsec = timeToSleep;
+
+    if (nanosleep(&tim.tv_sec , &tim.tv_nsec) < 0) {
+        printf("Nano sleep system call failed \n");
+        return -1;
+    }
+}
+
+/* Return how many space have in the boat hold */
+int getSpaceAvailableInTheHold() {
+
+    int i = 0;
+    int totalNumOfTons = 0;
+    for (i = 0; i < configArr[SO_MERCI]; i++) {
+        totalNumOfTons += goodHold[i].loadInTon;   
+    }
+
+    return boat.capacityInTon - totalNumOfTons;
+}
+
+int cleanup() {
+
     return 0;
 }
