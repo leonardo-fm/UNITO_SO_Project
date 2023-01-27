@@ -1,0 +1,12 @@
+int initializeSingalsHandlers();
+int initializeConfig(char* configShareMemoryIdString);
+int initializePort(char* portIdString, char* portShareMemoryIdS, char* goodShareMemoryIdS);
+int initializePortStruct(char* portIdString, char* portShareMemoryIdS);
+int initializeExchangeGoods();
+int initializePortGoods(char* goodShareMemoryIdS);
+int work();
+int newDay();
+int handlePA_EOT();
+int generateShareMemory(int sizeOfSegment);
+int generateSemaphore(int semKey);
+int cleanup();

@@ -1,4 +1,5 @@
 #define _GNU_SOURCES
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>   
@@ -14,6 +15,12 @@
 #include "lib/utilities.h"
 #include "lib/msgPortProtocol.h"
 
+#include "porto.h"
+
+int handlePA_ACCEPT(PortMessage recivedMsg);
+int handlePA_SE_GOOD(PortMessage recivedMsg);
+int handlePA_RQ_GOOD(PortMessage recivedMsg);
+
 int NUM_OF_SETTINGS = 13;
 int* configArr;
  
@@ -26,29 +33,17 @@ Goods** goodExchange;
 int startSimulation = 0;
 int simulationRunning = 1;
 
-/* Signals handlers https://en.wikipedia.org/wiki/C_signal_handling */
-static void handle_port_start(int sig) {
-    if (startSimulation == 1) {
-        printf("The simulation already start for port %d\n", port.id);
-        exit(5);
-    }
+void handle_port_start() {
 
     startSimulation = 1;
 }
 
-static void handle_port_newDay(int sig) {
-    if (startSimulation == 0) {
-        printf("The simulation not started yet for port %d\n", port.id);
-        exit(6);
-    }
+void handle_port_newDay() {
 
-    if (newDay() == -1) {
-        printf("Error during new day function for port %d\n", port.id);
-        exit(7);
-    }
+    newDay();
 }
 
-static void handle_port_stopSimulation(int sig) {
+void handle_port_stopSimulation() {
 
     simulationRunning = 0;
 }
@@ -56,7 +51,9 @@ static void handle_port_stopSimulation(int sig) {
 
 int main(int argx, char* argv[]) {
 
+    (void) argx;
     initializeEnvironment();
+    initializeSingalsHandlers();
 
     if (initializeConfig(argv[0]) == -1) {
         printf("Initialization of port config failed\n");
@@ -82,10 +79,25 @@ int main(int argx, char* argv[]) {
 }
 
 int initializeSingalsHandlers() {
+
     setpgid(getpid(), getppid());
-    signal(SIGUSR1, handle_port_start);
-    signal(SIGUSR2, handle_port_newDay);
-    signal(SIGTERM, handle_port_stopSimulation);
+
+    struct sigaction sa1;
+    sa1.sa_flags = SA_RESTART;
+    sa1.sa_handler = &handle_port_start;
+    sigaction(SIGUSR1, &sa1, NULL);
+
+    struct sigaction sa2;
+    sa2.sa_flags = SA_RESTART;
+    sa2.sa_handler = &handle_port_newDay;
+    sigaction(SIGUSR2, &sa2, NULL);
+
+    struct sigaction sa3;
+    sa3.sa_flags = SA_RESTART;
+    sa3.sa_handler = &handle_port_stopSimulation;
+    sigaction(SIGTERM, &sa3, NULL);
+
+    return 0;
 }
 
 /* Recover the array of the configurations values */
@@ -205,6 +217,8 @@ int initializeExchangeGoods() {
 
         arrReques[i] = goodRequested;
     }
+
+    return 0;
 }
 
 int initializePortGoods(char* goodShareMemoryIdS) {
@@ -304,10 +318,10 @@ int work() {
     /* wait for simulation to start */
     while (startSimulation == 0) { };
 
-    PortMessage* recivedMsg;
     while (simulationRunning == 1)
     {
-        int msgStatus = reciveMessage(port.msgQueuId, recivedMsg);
+        PortMessage recivedMsg;
+        int msgStatus = reciveMessage(port.msgQueuId, &recivedMsg);
         if (msgStatus == -1) {
             printf("Error during reciving message from boat\n");
             return -1;
@@ -316,7 +330,7 @@ int work() {
         if (msgStatus == 0) {
             
             /* New message */
-            switch (recivedMsg->msg.data.action)
+            switch (recivedMsg.msg.data.action)
             {
                 case PA_ACCEPT:
                     if (handlePA_ACCEPT(recivedMsg) == -1) {
@@ -353,6 +367,8 @@ int work() {
 
 int newDay() {
 
+    printf("Recived port new day\n"); 
+
     Goods* arrStock = (Goods*) shmat(goodStockShareMemoryId, NULL, 0);
     if (arrStock == (void*) -1) {
         printf("Error while opening stock good\n");
@@ -374,30 +390,50 @@ int newDay() {
     return 0;
 }
 
-int handlePA_ACCEPT(PortMessage* recivedMsg) {
+int handlePA_ACCEPT(PortMessage recivedMsg) {
 
     if (port.availableQuays > 0) {
-        sendMessage(port.msgQueuId, recivedMsg->msg.data.id, PA_Y, -1, -1);
+        if (sendMessage(port.msgQueuId, recivedMsg.msg.data.id, PA_Y, -1, -1) == -1) {
+            printf("Error during send ACCEPT\n");
+            return -1;
+        }
         port.availableQuays--;
     } else {
-        sendMessage(port.msgQueuId, recivedMsg->msg.data.id, PA_N, -1, -1);
+        if (sendMessage(port.msgQueuId, recivedMsg.msg.data.id, PA_N, -1, -1) == -1) {
+            printf("Error during send ACCEPT\n");
+            return -1;
+        }
     }
+
+    return 0;
 }
 
-int handlePA_SE_GOOD(PortMessage* recivedMsg) {
+int handlePA_SE_GOOD(PortMessage recivedMsg) {
     /* The boat want to sell some goods */
-    sendMessage(port.msgQueuId, recivedMsg->msg.data.id, PA_Y, 
-        goodRequestShareMemoryId, goodRequestShareMemoryId); /* The semaphore key is the same of the hared memory id */
+    if (sendMessage(port.msgQueuId, recivedMsg.msg.data.id, PA_Y, 
+        goodRequestShareMemoryId, goodRequestShareMemoryId) == -1) {
+            printf("Error during send SE_GOOD\n");
+            return -1;
+        }
+    
+    return 0;
 }
 
-int handlePA_RQ_GOOD(PortMessage* recivedMsg) {
+int handlePA_RQ_GOOD(PortMessage recivedMsg) {
     /* The boat want to buy some goods */
-    sendMessage(port.msgQueuId, recivedMsg->msg.data.id, PA_Y, 
-        goodStockShareMemoryId, goodStockShareMemoryId); /* The semaphore key is the same of the hared memory id */
+    if (sendMessage(port.msgQueuId, recivedMsg.msg.data.id, PA_Y, 
+        goodStockShareMemoryId, goodStockShareMemoryId) == -1) {
+            printf("Error during send RQ_GOOD\n");
+            return -1;
+        }
+
+    return 0;
 }
 
 int handlePA_EOT() {
     port.availableQuays++;
+
+    return 0;
 }
 
 int generateShareMemory(int sizeOfSegment) {
@@ -435,6 +471,8 @@ int generateSemaphore(int semKey) {
 }
 
 int cleanup() {
+
+    printf("Recived port end\n"); 
     
     if (msgctl(port.msgQueuId, IPC_RMID, NULL) == -1) {
         printf("The queue failed to be closed\n");
@@ -450,4 +488,6 @@ int cleanup() {
         printf("The shared memory failed to be closed\n");
         return -1;
     }
+
+    return 0;
 }

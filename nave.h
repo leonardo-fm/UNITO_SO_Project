@@ -1,0 +1,16 @@
+int initializeSingalsHandlers();
+int initializeConfig(char* configShareMemoryIdString);
+int initializeBoat(char* boatIdS, char* shareMemoryIdS);
+int work();
+int newDay();
+int gotoPort();
+int openTrade(int portId);
+int trade();
+int closeTrade();
+int haveIGoodsToSell();
+int haveIGoodsToBuy();
+int sellGoods();
+int buyGoods();
+int waitExchange(int timeToSleep);
+int getSpaceAvailableInTheHold();
+int cleanup();

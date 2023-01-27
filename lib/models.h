@@ -23,16 +23,6 @@ typedef enum {
     SO_DAYS, 
 } ConfigurationVariables;
 
-typedef struct {
-    time_t tv_sec;        /* seconds */
-    long   tv_nsec;       /* nanoseconds */
-} timespec;
-
-typedef struct {
-    time_t tv_sec;        /* seconds */
-    long   tv_nsec;       /* nanoseconds */
-} sigaction;
-
 
 /* GOODS */
 

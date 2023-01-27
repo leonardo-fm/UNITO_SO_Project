@@ -1,7 +1,7 @@
 #define _GNU_SOURCES
+
 #include <stdio.h>
 #include <stdlib.h>
-
 #include <unistd.h>   
 #include <signal.h>  
 #include <errno.h>
@@ -15,10 +15,18 @@
 #include "lib/config.h"
 #include "lib/utilities.h"
 
+#include "master.h"
+
 int NUM_OF_SETTINGS = 13;
 int* configArr;
 
-int main(int argx, char* argv[]) {
+void handle_master_start() { }
+
+void handle_master_newDay() { }
+
+void handle_master_stopSimulation() { }
+
+int main() {
 
     setpgid(getpid(), getpid());
 
@@ -35,6 +43,7 @@ int main(int argx, char* argv[]) {
     }
 
     initializeEnvironment();
+    initializeSingalsHandlers();
     if (loadConfig(configShareMemoryId) == -1) {
         exit(3);
     }
@@ -68,7 +77,9 @@ int main(int argx, char* argv[]) {
     if (generateSubProcesses(configArr[SO_NAVI], "./bin/nave", configShareMemoryId, portShareMemoryId, 0) == -1) {
         exit(8);
     }
- 
+
+    sleep(1);
+
     if (work() == -1) {
         printf("Error during master work\n");
         exit(9);
@@ -84,19 +95,61 @@ int main(int argx, char* argv[]) {
     return 0;
 }
 
-int work() {
+int initializeSingalsHandlers() {
 
+    setpgid(getpid(), getppid());
+
+    struct sigaction sa1;
+    sa1.sa_flags = SA_RESTART;
+    sa1.sa_handler = &handle_master_start;
+    sigaction(SIGUSR1, &sa1, NULL);
+
+    struct sigaction sa2;
+    sa2.sa_flags = SA_RESTART;
+    sa2.sa_handler = &handle_master_newDay;
+    sigaction(SIGUSR2, &sa2, NULL);
+
+    struct sigaction sa3;
+    sa3.sa_flags = SA_RESTART;
+    sa3.sa_handler = &handle_master_stopSimulation;
+    sigaction(SIGTERM, &sa3, NULL);
+
+    return 0;
+}
+
+int work() {
+    printf("Master pid: %d\n", getpid());
     int simulationDays = configArr[SO_DAYS];
-    killpg(getpid(), SIGUSR1); /* TODO fix killpg not found */
+    int id = fork();
+    if (id == 0) {
+        killpg(getppid(), SIGUSR1);
+        printf("Sended signal brodcast to id: %d\n", getppid());
+        exit(11);
+    }
 
     while (simulationDays > 0)
     {
+        printf("Starting day %d\n", simulationDays);
         simulationDays--;
+
         sleep(1);
-        killpg(getpid(), SIGUSR2); /* TODO fix killpg not found */
+
+        id = fork();
+        if (id == 0) {
+            killpg(getppid(), SIGUSR2);
+            exit(12);
+        }
     }
     
-    killpg(getpid(), SIGTERM); /* TODO fix killpg not found */
+    printf("Simulation finished\n");
+
+    id = fork();
+    if (id == 0) {
+        killpg(getppid(), SIGTERM);
+        exit(13);
+    }
+
+    sleep(1);
 
     return 0;
 }
@@ -177,6 +230,8 @@ int initializeGoods(int goodShareMemoryId) {
     if (generateSemaphore() == -1) {
         return -1;
     }
+
+    return 0;
 }
 
 /* Generate all the goods requested and initialize them */
@@ -235,4 +290,6 @@ int cleanup(int pointerIdArr[], int size) {
             return -1;
         }
     }
+
+    return 0;
 }

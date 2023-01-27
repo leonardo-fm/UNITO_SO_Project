@@ -3,6 +3,7 @@
         "msgportprotocol.h": "c",
         "time.h": "c",
         "signal.h": "c",
-        "math.h": "c"
+        "math.h": "c",
+        "config.h": "c"
     }
 }

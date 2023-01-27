@@ -59,7 +59,7 @@ int reciveMessage(int msgQueueId, PortMessage* pMsg) {
         return -1;
     }
 
-    if (strlen(pMsg->msg.msg) != MAX_BUFFER_PORT_MSG) {
+    if ((int) strlen(pMsg->msg.msg) != MAX_BUFFER_PORT_MSG) {
         return -2;
     } else {
         msgctl(msgQueueId, IPC_RMID, 0);

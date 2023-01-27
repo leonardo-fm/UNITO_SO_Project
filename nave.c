@@ -1,27 +1,30 @@
 #define _GNU_SOURCES
 
-#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>    
 
-#include <sys/shm.h>   
+#include <sys/shm.h>  
+#include <sys/msg.h> 
 #include <semaphore.h>
 #include <fcntl.h>      
 
 #include <time.h>
 #include <signal.h>
 
+#include <math.h>
 
 #include "lib/utilities.h"
 #include "lib/config.h"
 #include "lib/msgPortProtocol.h"
 
+#include "nave.h"
+
 int NUM_OF_SETTINGS = 13;
 int* configArr;
 
 int portSharedMemoryPointer; 
-int currentMsgQueueId;
+int currentMsgQueueId = -1;
 int currentPort = -1;
 
 Boat boat;
@@ -30,29 +33,17 @@ Goods* goodHold;
 int startSimulation = 0;
 int simulationRunning = 1;
 
-/* Signals handlers https://en.wikipedia.org/wiki/C_signal_handling */
-static void handle_boat_start(int sig) {
-    if (startSimulation == 1) {
-        printf("The simulation already start for boat %d\n", boat.id);
-        exit(5);
-    }
+void handle_boat_start(int num) {
 
     startSimulation = 1;
 }
 
-static void handle_boat_newDay(int sig) {
-    if (startSimulation == 0) {
-        printf("The simulation not started yet for boat %d\n", boat.id);
-        exit(6);
-    }
+void handle_boat_newDay() {
 
-    if (newDay() == -1) {
-        printf("Error during new day function for boat %d\n", boat.id);
-        exit(7);
-    }
+    newDay();
 }
 
-static void handle_boat_stopSimulation(int sig) {
+void handle_boat_stopSimulation() {
 
     simulationRunning = 0;
 }
@@ -60,6 +51,7 @@ static void handle_boat_stopSimulation(int sig) {
 
 int main(int argx, char* argv[]) {
 
+    (void) argx;
     initializeEnvironment();
     initializeSingalsHandlers();
 
@@ -87,10 +79,26 @@ int main(int argx, char* argv[]) {
 }
 
 int initializeSingalsHandlers() {
+
     setpgid(getpid(), getppid());
-    signal(SIGUSR1, handle_boat_start);
-    signal(SIGUSR2, handle_boat_newDay);
-    signal(SIGTERM, handle_boat_stopSimulation);
+    printf("listening on id: %d\n", getppid());
+
+    struct sigaction sa1;
+    sa1.sa_flags = SA_RESTART;
+    sa1.sa_handler = &handle_boat_start;
+    sigaction(SIGUSR1, &sa1, NULL);
+
+    struct sigaction sa2;
+    sa2.sa_flags = SA_RESTART;
+    sa2.sa_handler = &handle_boat_newDay;
+    sigaction(SIGUSR2, &sa2, NULL);
+
+    struct sigaction sa3;
+    sa3.sa_flags = SA_RESTART;
+    sa3.sa_handler = &handle_boat_stopSimulation;
+    sigaction(SIGTERM, &sa3, NULL);
+
+    return 0;
 }
 
 int initializeConfig(char* configShareMemoryIdString) {
@@ -141,6 +149,7 @@ int work() {
     /* wait for simulation to start */
     while (startSimulation == 0) { };
 
+    printf("AAAAAAAAAAAAAAAAAAA\n");
     while (simulationRunning == 1)
     {
         if (gotoPort() == -1) {
@@ -159,6 +168,8 @@ int work() {
 }
 
 int newDay() {
+
+    printf("Recived boat new day\n"); 
 
     int i = 0;
     for (i = 0; i < configArr[SO_MERCI]; i++) {
@@ -223,10 +234,10 @@ int openTrade(int portId) {
     }
 
     int waitResponse = 1;
-    PortMessage* response;
+    PortMessage response;
     while (waitResponse == 1) {
         
-        int msgResponse = reciveMessageById(currentMsgQueueId, boat.id, response);
+        int msgResponse = reciveMessageById(currentMsgQueueId, boat.id, &response);
         if (msgResponse == -1) {
             printf("Error during weating response from ACCEPT\n");
             return -1;
@@ -237,7 +248,7 @@ int openTrade(int portId) {
         }
     }
     
-    if (response->msg.data.action == PA_N) {
+    if (response.msg.data.action == PA_N) {
         return 1;
     }
     
@@ -325,10 +336,10 @@ int sellGoods() {
 
     /* Wait response */
     int waitResponse = 1;
-    PortMessage* response;
+    PortMessage response;
     while (waitResponse == 1) {
         
-        int msgResponse = reciveMessageById(currentMsgQueueId, boat.id, response);
+        int msgResponse = reciveMessageById(currentMsgQueueId, boat.id, &response);
         if (msgResponse == -1) {
             printf("Error during weating response from PA_SE_GOOD\n");
             return -1;
@@ -339,13 +350,13 @@ int sellGoods() {
         }
     }
 
-    if (response->msg.data.action == PA_N) {
+    if (response.msg.data.action == PA_N) {
         return 0;
     }
 
     /* Get semaphore */
     char semaphoreKey[12];
-    if (sprintf(semaphoreKey, "%d", response->msg.data.semaphoreKey) == -1) {
+    if (sprintf(semaphoreKey, "%d", response.msg.data.semaphoreKey) == -1) {
         printf("Error during conversion of the pid for semaphore to a string\n");
         return -1;
     }   
@@ -357,7 +368,7 @@ int sellGoods() {
     }
 
     /* Get shared memory of the port */
-    Goods* arr = (Goods*) shmat(response->msg.data.sharedMemoryId, NULL, 0);
+    Goods* arr = (Goods*) shmat(response.msg.data.sharedMemoryId, NULL, 0);
     if (arr == (void*) -1) {
         printf("Error opening goods shared memory\n");
         return -1;
@@ -414,10 +425,10 @@ int buyGoods() {
 
     /* Wait response */
     int waitResponse = 1;
-    PortMessage* response;
+    PortMessage response;
     while (waitResponse == 1) {
         
-        int msgResponse = reciveMessageById(currentMsgQueueId, boat.id, response);
+        int msgResponse = reciveMessageById(currentMsgQueueId, boat.id, &response);
         if (msgResponse == -1) {
             printf("Error during weating response from PA_RQ_GOOD\n");
             return -1;
@@ -428,13 +439,13 @@ int buyGoods() {
         }
     }
 
-    if (response->msg.data.action == PA_N) {
+    if (response.msg.data.action == PA_N) {
         return 0;
     }
 
     /* Get semaphore */
     char semaphoreKey[12];
-    if (sprintf(semaphoreKey, "%d", response->msg.data.semaphoreKey) == -1) {
+    if (sprintf(semaphoreKey, "%d", response.msg.data.semaphoreKey) == -1) {
         printf("Error during conversion of the pid for semaphore to a string\n");
         return -1;
     }   
@@ -446,7 +457,7 @@ int buyGoods() {
     }
 
     /* Get shared memory of the port */
-    Goods* arr = (Goods*) shmat(response->msg.data.sharedMemoryId, NULL, 0);
+    Goods* arr = (Goods*) shmat(response.msg.data.sharedMemoryId, NULL, 0);
     if (arr == (void*) -1) {
         printf("Error opening goods shared memory\n");
         return -1;
@@ -496,14 +507,16 @@ int buyGoods() {
 
 int waitExchange(int timeToSleep) {
 
-    timespec tim;
-    tim.tv_sec = 0;
-    tim.tv_nsec = timeToSleep;
+    struct timespec ts1, ts2;
+    ts1.tv_sec = 0;
+    ts1.tv_nsec = (long) timeToSleep;
 
-    if (nanosleep(&tim.tv_sec , &tim.tv_nsec) < 0) { /* TODO fix nanosleep not found */
+    if (nanosleep(&ts1 , &ts2) < 0) {
         printf("Nano sleep system call failed \n");
         return -1;
     }
+
+    return 0;
 }
 
 /* Return how many space have in the boat hold */
@@ -519,6 +532,8 @@ int getSpaceAvailableInTheHold() {
 }
 
 int cleanup() {
+
+    printf("Recived boat end\n"); 
 
     return 0;
 }
