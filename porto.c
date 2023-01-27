@@ -8,6 +8,8 @@
 #include <semaphore.h>
 #include <fcntl.h>      
 
+#include <signal.h>
+
 #include "lib/config.h"
 #include "lib/utilities.h"
 #include "lib/msgPortProtocol.h"
@@ -15,10 +17,42 @@
 int NUM_OF_SETTINGS = 13;
 int* configArr;
  
-Port port;
 int goodStockShareMemoryId;
 int goodRequestShareMemoryId;
+
+Port port;
 Goods** goodExchange;
+
+int startSimulation = 0;
+int simulationRunning = 1;
+
+/* Signals handlers https://en.wikipedia.org/wiki/C_signal_handling */
+static void handle_port_start(int sig) {
+    if (startSimulation == 1) {
+        printf("The simulation already start for port %d\n", port.id);
+        exit(5);
+    }
+
+    startSimulation = 1;
+}
+
+static void handle_port_newDay(int sig) {
+    if (startSimulation == 0) {
+        printf("The simulation not started yet for port %d\n", port.id);
+        exit(6);
+    }
+
+    if (newDay() == -1) {
+        printf("Error during new day function for port %d\n", port.id);
+        exit(7);
+    }
+}
+
+static void handle_port_stopSimulation(int sig) {
+
+    simulationRunning = 0;
+}
+
 
 int main(int argx, char* argv[]) {
 
@@ -34,12 +68,24 @@ int main(int argx, char* argv[]) {
         exit(2);
     }
 
-    if (cleanup() == -1) {
-        printf("Cleanup failed\n");
+    if (work() == -1) {
+        printf("Error during port %d work\n", port.id);
         exit(3);
     }
 
+    if (cleanup() == -1) {
+        printf("Cleanup failed\n");
+        exit(4);
+    }
+
     return 0;
+}
+
+int initializeSingalsHandlers() {
+    setpgid(getpid(), getppid());
+    signal(SIGUSR1, handle_port_start);
+    signal(SIGUSR2, handle_port_newDay);
+    signal(SIGTERM, handle_port_stopSimulation);
 }
 
 /* Recover the array of the configurations values */
@@ -209,21 +255,21 @@ int initializePortGoods(char* goodShareMemoryIdS) {
     sem_wait(semaphore);
 
     Goods* arrStock = (Goods*) shmat(goodStockShareMemoryId, NULL, 0);
-    if (arr == (void*) -1) {
-        printf("Error during good memory allocation\n"); /*TODO ERRORE SBAGLIATO*/
+    if (arrStock == (void*) -1) {
+        printf("Error while opening stock good\n");
         return -1;
     }
 
     Goods* arrReques = (Goods*) shmat(goodRequestShareMemoryId, NULL, 0);
-    if (arr == (void*) -1) {
-        printf("Error during good memory allocation\n"); /*TODO ERRORE SBAGLIATO*/
+    if (arrReques == (void*) -1) {
+        printf("Error while opening request good\n");
         return -1;
     }
 
     for (i = 0; i < numOfGoods; i++) {
         int currentGood = goodsToTake[i];
 
-        /* Get life span */
+        /* Set life span */
         arrStock[currentGood].remaningDays = arr[currentGood].remaningDays;
         arrReques[currentGood].remaningDays = arr[currentGood].remaningDays;
 
@@ -253,13 +299,14 @@ int initializePortGoods(char* goodShareMemoryIdS) {
     return 0;
 }
 
-int trade() {
+int work() {
 
-    int treading = 1;
-    
+    /* wait for simulation to start */
+    while (startSimulation == 0) { };
+
     PortMessage* recivedMsg;
-    while (treading == 1) {
-
+    while (simulationRunning == 1)
+    {
         int msgStatus = reciveMessage(port.msgQueuId, recivedMsg);
         if (msgStatus == -1) {
             printf("Error during reciving message from boat\n");
@@ -267,26 +314,62 @@ int trade() {
         }
 
         if (msgStatus == 0) {
+            
             /* New message */
             switch (recivedMsg->msg.data.action)
             {
                 case PA_ACCEPT:
-                    handlePA_ACCEPT(recivedMsg);
+                    if (handlePA_ACCEPT(recivedMsg) == -1) {
+                        printf("Error during ACCEPT handling\n");
+                        return -1;
+                    };
                     break;
                 case PA_RQ_GOOD:
-                    handlePA_RQ_GOOD(recivedMsg);
+                    if (handlePA_RQ_GOOD(recivedMsg) == -1) {
+                        printf("Error during RQ_GOOD handling\n");
+                        return -1;
+                    };
                     break;
                 case PA_SE_GOOD:
-                    handlePA_SE_GOOD(recivedMsg);
+                    if (handlePA_SE_GOOD(recivedMsg) == -1) {
+                        printf("Error during SE_GOOD handling\n");
+                        return -1;
+                    };
                     break;
                 case PA_EOT:
-                    handlePA_EOT();
+                    if (handlePA_EOT() == -1) {
+                        printf("Error during EOT handling\n");
+                        return -1;
+                    };
                     break;
                 default:
                     break;
             }
         } 
     }
+
+    return 0;
+}
+
+int newDay() {
+
+    Goods* arrStock = (Goods*) shmat(goodStockShareMemoryId, NULL, 0);
+    if (arrStock == (void*) -1) {
+        printf("Error while opening stock good\n");
+        return -1;
+    }
+
+    int i = 0;
+    for (i = 0; i < configArr[SO_MERCI]; i++) {
+        if(arrStock[i].remaningDays > 0) {
+            arrStock[i].remaningDays--;
+            if (arrStock[i].remaningDays == 0) {
+                arrStock[i].state = Expired_In_The_Port;
+            }
+        }
+    }
+
+    /* TODO Dealy dump */
 
     return 0;
 }

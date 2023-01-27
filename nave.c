@@ -1,12 +1,17 @@
+#define _GNU_SOURCES
+
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>    
-#include <sys/shm.h>   
 
+#include <sys/shm.h>   
 #include <semaphore.h>
 #include <fcntl.h>      
 
 #include <time.h>
+#include <signal.h>
+
 
 #include "lib/utilities.h"
 #include "lib/config.h"
@@ -15,14 +20,48 @@
 int NUM_OF_SETTINGS = 13;
 int* configArr;
 
-int sharedMemoryPointer; 
+int portSharedMemoryPointer; 
 int currentMsgQueueId;
+int currentPort = -1;
+
 Boat boat;
 Goods* goodHold;
+
+int startSimulation = 0;
+int simulationRunning = 1;
+
+/* Signals handlers https://en.wikipedia.org/wiki/C_signal_handling */
+static void handle_boat_start(int sig) {
+    if (startSimulation == 1) {
+        printf("The simulation already start for boat %d\n", boat.id);
+        exit(5);
+    }
+
+    startSimulation = 1;
+}
+
+static void handle_boat_newDay(int sig) {
+    if (startSimulation == 0) {
+        printf("The simulation not started yet for boat %d\n", boat.id);
+        exit(6);
+    }
+
+    if (newDay() == -1) {
+        printf("Error during new day function for boat %d\n", boat.id);
+        exit(7);
+    }
+}
+
+static void handle_boat_stopSimulation(int sig) {
+
+    simulationRunning = 0;
+}
+
 
 int main(int argx, char* argv[]) {
 
     initializeEnvironment();
+    initializeSingalsHandlers();
 
     if (initializeConfig(argv[0]) == -1) {
         printf("Initialization of boat config failed\n");
@@ -34,12 +73,24 @@ int main(int argx, char* argv[]) {
         exit(2);
     }
 
-    if (cleanup() == -1) {
-        printf("Cleanup failed\n");
+    if (work() == -1) {
+        printf("Error during boat %d work\n", boat.id);
         exit(3);
     }
 
+    if (cleanup() == -1) {
+        printf("Cleanup failed\n");
+        exit(4);
+    }
+
     return 0;
+}
+
+int initializeSingalsHandlers() {
+    setpgid(getpid(), getppid());
+    signal(SIGUSR1, handle_boat_start);
+    signal(SIGUSR2, handle_boat_newDay);
+    signal(SIGTERM, handle_boat_stopSimulation);
 }
 
 int initializeConfig(char* configShareMemoryIdString) {
@@ -63,7 +114,7 @@ int initializeBoat(char* boatIdS, char* shareMemoryIdS) {
     boat.speed = configArr[SO_SPEED];
     boat.state = In_Sea;
 
-    sharedMemoryPointer = strtol(shareMemoryIdS, &p, 10);
+    portSharedMemoryPointer = strtol(shareMemoryIdS, &p, 10);
 
     /* Initialization of the hold */
     goodHold = malloc(sizeof(Goods) * configArr[SO_MERCI]);
@@ -84,7 +135,79 @@ int initializeBoat(char* boatIdS, char* shareMemoryIdS) {
     
     return 0;
 }
- /* Return 0 if the trade is a success, 1 if the port refuse to accept the boat, -1 for errors */
+
+int work() {
+
+    /* wait for simulation to start */
+    while (startSimulation == 0) { };
+
+    while (simulationRunning == 1)
+    {
+        if (gotoPort() == -1) {
+            printf("Error while going to a port\n");
+            return -1;
+        }
+
+        int tradeStatus = openTrade(currentPort);
+        if (tradeStatus == -1) {
+            printf("Error during trade\n");
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
+int newDay() {
+
+    int i = 0;
+    for (i = 0; i < configArr[SO_MERCI]; i++) {
+        if(goodHold[i].remaningDays > 0) {
+            goodHold[i].remaningDays--;
+            if (goodHold[i].remaningDays == 0) {
+                goodHold[i].state = Expired_In_The_Boat;
+            }
+        }
+    }
+
+    /* TODO Dealy dump */
+
+    return 0;
+}
+
+int gotoPort() {
+
+    int newPortFound = 0;
+
+    Coordinates* arr = (Coordinates*) shmat(portSharedMemoryPointer, NULL, 0);
+    if (arr == (void*) -1) {
+        printf("Error during opening ports coordinate share memory\n");
+        return -1;
+    }
+
+    while (newPortFound == 0)
+    {
+        int randomPort = getRandomValue(0, configArr[SO_PORTI] - 1);
+
+        if (randomPort != currentPort) {
+            newPortFound = 1;
+            currentPort = randomPort;
+        }
+    }
+
+    double num = (double)(((arr[currentPort].x - boat.position.x) * (arr[currentPort].x - boat.position.x))) 
+        + (double)(((arr[currentPort].y - boat.position.y) * (arr[currentPort].y - boat.position.y)));
+    double distance = sqrt(num);
+
+    if (waitExchange(distance / configArr[SO_SPEED]) == -1) {
+        printf("Error while waiting to go to in a port\n");
+        return -1;
+    }
+
+    return 0;
+}
+
+/* Return 0 if the trade is a success, 1 if the port refuse to accept the boat, -1 for errors */
 int openTrade(int portId) {
 
     if (currentMsgQueueId != -1) {
@@ -243,7 +366,7 @@ int sellGoods() {
     /* Sell all available goods */
     int i = 0;
     for (i = 0; i < configArr[SO_MERCI]; i++) {
-        if (goodHold[i].loadInTon > 0) {
+        if (goodHold[i].loadInTon > 0 && goodHold[i].state != Expired_In_The_Boat) {
             
             if (arr[i].loadInTon == 0) {
                 continue;
@@ -332,7 +455,7 @@ int buyGoods() {
     /* Buy some available goods */
     int i = 0;
     for (i = 0; i < configArr[SO_MERCI]; i++) {
-        if (arr[i].loadInTon > 0) {
+        if (arr[i].loadInTon > 0 && arr[i].state != Expired_In_The_Port) {
             
             sem_wait(semaphore);
 
@@ -377,7 +500,7 @@ int waitExchange(int timeToSleep) {
     tim.tv_sec = 0;
     tim.tv_nsec = timeToSleep;
 
-    if (nanosleep(&tim.tv_sec , &tim.tv_nsec) < 0) {
+    if (nanosleep(&tim.tv_sec , &tim.tv_nsec) < 0) { /* TODO fix nanosleep not found */
         printf("Nano sleep system call failed \n");
         return -1;
     }

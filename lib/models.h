@@ -28,6 +28,12 @@ typedef struct {
     long   tv_nsec;       /* nanoseconds */
 } timespec;
 
+typedef struct {
+    time_t tv_sec;        /* seconds */
+    long   tv_nsec;       /* nanoseconds */
+} sigaction;
+
+
 /* GOODS */
 
 typedef enum { 

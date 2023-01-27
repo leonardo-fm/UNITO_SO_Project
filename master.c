@@ -9,7 +9,8 @@
 #include <semaphore.h>
 #include <fcntl.h>    
 
-#include <sys/shm.h>       
+#include <sys/shm.h>    
+#include <signal.h>   
 
 #include "lib/config.h"
 #include "lib/utilities.h"
@@ -18,6 +19,8 @@ int NUM_OF_SETTINGS = 13;
 int* configArr;
 
 int main(int argx, char* argv[]) {
+
+    setpgid(getpid(), getpid());
 
     /* ----- CONFIG ----- */
     int configShareMemoryId = generateShareMemory(sizeof(int) * NUM_OF_SETTINGS);
@@ -66,15 +69,34 @@ int main(int argx, char* argv[]) {
         exit(8);
     }
  
-    /* Avoid semaphore error creation */
-    sleep(1);
+    if (work() == -1) {
+        printf("Error during master work\n");
+        exit(9);
+    }
 
     /* Array of pointers of shared memory segment */
     int arrOfPointerId[] = {configShareMemoryId, goodShareMemoryId, portShareMemoryId}; 
     if (cleanup(arrOfPointerId, sizeof(arrOfPointerId) / sizeof(int)) == -1) {
         printf("Cleanup failed\n");
-        exit(9);
+        exit(10);
     }
+
+    return 0;
+}
+
+int work() {
+
+    int simulationDays = configArr[SO_DAYS];
+    killpg(getpid(), SIGUSR1); /* TODO fix killpg not found */
+
+    while (simulationDays > 0)
+    {
+        simulationDays--;
+        sleep(1);
+        killpg(getpid(), SIGUSR2); /* TODO fix killpg not found */
+    }
+    
+    killpg(getpid(), SIGTERM); /* TODO fix killpg not found */
 
     return 0;
 }
