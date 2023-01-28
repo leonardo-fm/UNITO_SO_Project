@@ -5,6 +5,8 @@
         "signal.h": "c",
         "math.h": "c",
         "config.h": "c",
-        "shm.h": "c"
+        "shm.h": "c",
+        "compare": "c",
+        "type_traits": "c"
     }
 }

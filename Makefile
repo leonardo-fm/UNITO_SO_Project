@@ -7,7 +7,7 @@ run: build
 build: master nave porto
 
 master: master.c
-	gcc -Wall -Wextra -g -o bin/master master.c lib/config.c lib/utilities.c
+	gcc -Wall -Wextra -g -o bin/master master.c lib/config.c lib/utilities.c 
 
 nave: nave.c
 	gcc -Wall -Wextra -g -o bin/nave nave.c lib/config.c lib/utilities.c lib/msgPortProtocol.c -lm

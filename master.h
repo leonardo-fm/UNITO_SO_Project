@@ -5,4 +5,4 @@ int generateSubProcesses(int nOfProcess, char* execFilePath, int configShareMemo
 int initializeGoods(int goodShareMemoryId);
 int generateGoods(int goodShareMemoryId);
 int generateSemaphore();
-int cleanup(int pointerIdArr[], int size);
+int cleanup();

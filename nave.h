@@ -12,6 +12,5 @@ int haveIGoodsToSell();
 int haveIGoodsToBuy();
 int sellGoods();
 int buyGoods();
-int waitExchange(int timeToSleep);
 int getSpaceAvailableInTheHold();
 int cleanup();

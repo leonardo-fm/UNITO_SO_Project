@@ -8,6 +8,7 @@
 #include <sys/msg.h> 
 #include <semaphore.h>
 #include <fcntl.h>      
+#include <errno.h>
 
 #include <time.h>
 #include <signal.h>
@@ -46,7 +47,8 @@ void handle_boat_newDay() {
 }
 
 void handle_boat_stopSimulation() {
-
+    
+    runningStatus = 0;
     simulationRunning = 0;
 }
 
@@ -71,10 +73,9 @@ int main(int argx, char* argv[]) {
         printf("Error during boat %d work\n", boat.id);
         exit(3);
     }
-    
-    printf("Starting BOAT clear\n");
+
     if (cleanup() == -1) {
-        printf("Cleanup failed\n");
+        printf("Main Cleanup failed\n");
         exit(4);
     }
 
@@ -152,7 +153,7 @@ int work() {
     while (startSimulation == 0) { };
 
     while (simulationRunning == 1)
-    {
+    {   
         if (gotoPort() == -1) {
             printf("Error while going to a port\n");
             return -1;
@@ -175,8 +176,6 @@ int work() {
 
 int newDay() {
 
-    printf("Recived boat new day\n"); 
-
     int i = 0;
     for (i = 0; i < configArr[SO_MERCI]; i++) {
         if(goodHold[i].remaningDays > 0) {
@@ -193,6 +192,10 @@ int newDay() {
 }
 
 int gotoPort() {
+
+    if (simulationRunning == 0) {
+        return 0;
+    }
 
     int newPortFound = 0;
 
@@ -216,8 +219,14 @@ int gotoPort() {
         + (double)(((arr[currentPort].position.y - boat.position.y) * (arr[currentPort].position.y - boat.position.y)));
     double distance = sqrt(num);
 
-    if (waitExchange(distance / configArr[SO_SPEED]) == -1) {
+    long waitTimeNs = getNanoSeconds(distance / configArr[SO_SPEED]);
+    if (safeWait(0, waitTimeNs) == -1) {
         printf("Error while waiting to go to in a port\n");
+        return -1;
+    }
+
+    if (shmdt(arr) == -1) {
+        printf("The arr port coordinates detach failed\n");
         return -1;
     }
 
@@ -225,6 +234,10 @@ int gotoPort() {
 }
 
 int setupTrade(int portId) {
+
+    if (simulationRunning == 0) {
+        return 0;
+    }
 
     readingMsgQueue = msgget(IPC_PRIVATE, IPC_CREAT | 0600);
     writingMsgQueue = msgget(IPC_PRIVATE, IPC_CREAT | 0600);
@@ -247,11 +260,20 @@ int setupTrade(int portId) {
         return -1;
     }
 
+    if (shmdt(arr) == -1) {
+        printf("The arr port msg queue detach failed\n");
+        return -1;
+    }
+
     return 0;
 }
 
 /* Return 0 if the trade is a success, 1 if the port refuse to accept the boat, -1 for errors */
 int openTrade() {
+
+    if (simulationRunning == 0) {
+        return 0;
+    }
 
     if (sendMessage(writingMsgQueue, PA_ACCEPT, 0, 0) == -1) {
         printf("Failed to send ACCEPT comunication\n");
@@ -260,9 +282,9 @@ int openTrade() {
     
     int waitResponse = 1;
     PortMessage response;
-    while (waitResponse == 1) {
+    while (waitResponse == 1 && simulationRunning == 1) {
         
-        int msgResponse = reciveMessage(readingMsgQueue, &response, 0);
+        int msgResponse = receiveMessage(readingMsgQueue, &response, 0);
         if (msgResponse == -1) {
             printf("Error during weating response from ACCEPT\n");
             return -1;
@@ -271,6 +293,10 @@ int openTrade() {
         if (msgResponse == 0) {
             waitResponse = 0;
         }
+    }
+
+    if (simulationRunning == 0) {
+        return 0;
     }
     
     if (response.msg.data.action == PA_N) {
@@ -318,9 +344,12 @@ int closeTrade() {
         return -1;
     }
 
-    currentMsgQueueId = -1;
-    readingMsgQueue = -1;
-    writingMsgQueue = -1;
+    if (simulationRunning == 1) {
+
+        currentMsgQueueId = -1;
+        readingMsgQueue = -1;
+        writingMsgQueue = -1;
+    }
 
     return 0;
 }
@@ -365,9 +394,9 @@ int sellGoods() {
     /* Wait response */
     int waitResponse = 1;
     PortMessage response;
-    while (waitResponse == 1) {
+    while (waitResponse == 1 && simulationRunning == 1) {
         
-        int msgResponse = reciveMessage(readingMsgQueue, &response, 0);
+        int msgResponse = receiveMessage(readingMsgQueue, &response, 0);
         if (msgResponse == -1) {
             printf("Error during weating response from PA_SE_GOOD\n");
             return -1;
@@ -379,6 +408,10 @@ int sellGoods() {
     }
 
     if (response.msg.data.action == PA_N) {
+        return 0;
+    }
+
+    if (simulationRunning == 0) {
         return 0;
     }
 
@@ -428,8 +461,9 @@ int sellGoods() {
 
             sem_post(semaphore);
 
-            if(waitExchange(exchange / configArr[SO_LOADSPEED]) == -1) {
-                printf("Error in start nanosleep\n");
+            long waitTimeNs = getNanoSeconds(exchange / configArr[SO_LOADSPEED]);
+            if (safeWait(0, waitTimeNs) == -1) {
+                printf("Error while waiting to exchange\n");
                 return -1;
             }
         }    
@@ -437,6 +471,11 @@ int sellGoods() {
 
     if (sem_close(semaphore) < 0) {
         printf("Error unable to close the good semaphore\n");
+        return -1;
+    }
+
+    if (shmdt(arr) == -1) {
+        printf("The arr sell detach failed\n");
         return -1;
     }
 
@@ -454,9 +493,9 @@ int buyGoods() {
     /* Wait response */
     int waitResponse = 1;
     PortMessage response;
-    while (waitResponse == 1) {
+    while (waitResponse == 1 && simulationRunning == 1) {
         
-        int msgResponse = reciveMessage(readingMsgQueue, &response, 0);
+        int msgResponse = receiveMessage(readingMsgQueue, &response, 0);
         if (msgResponse == -1) {
             printf("Error during weating response from PA_RQ_GOOD\n");
             return -1;
@@ -468,6 +507,10 @@ int buyGoods() {
     }
 
     if (response.msg.data.action == PA_N) {
+        return 0;
+    }
+
+    if (simulationRunning == 0) {
         return 0;
     }
 
@@ -514,8 +557,9 @@ int buyGoods() {
 
             sem_post(semaphore);
 
-            if(waitExchange(exchange / configArr[SO_LOADSPEED]) == -1) {
-                printf("Error in start nanosleep\n");
+            long waitTimeNs = getNanoSeconds(exchange / configArr[SO_LOADSPEED]);
+            if (safeWait(0, waitTimeNs) == -1) {
+                printf("Error while waiting to exchange\n");
                 return -1;
             }
             
@@ -529,23 +573,16 @@ int buyGoods() {
         printf("Error unable to close the good semaphore\n");
         return -1;
     }
+
+    if (shmdt(arr) == -1) {
+        printf("The arr buy detach failed\n");
+        return -1;
+    }
     
     return 0;
 }
 
-int waitExchange(int timeToSleep) {
 
-    struct timespec ts1, ts2;
-    ts1.tv_sec = 0;
-    ts1.tv_nsec = (long) timeToSleep;
-
-    if (nanosleep(&ts1 , &ts2) < 0) {
-        printf("Nano sleep system call failed \n");
-        return -1;
-    }
-
-    return 0;
-}
 
 /* Return how many space have in the boat hold */
 int getSpaceAvailableInTheHold() {
@@ -561,7 +598,24 @@ int getSpaceAvailableInTheHold() {
 
 int cleanup() {
 
-    printf("Recived boat end\n"); 
+    if (shmdt(configArr) == -1) {
+        printf("The config detach failed\n");
+        return -1;
+    }
+
+    if (readingMsgQueue != -1) {
+        if (msgctl(readingMsgQueue, IPC_RMID, NULL) == -1) {
+            printf("BOAT R The queue failed to be closed\n");
+            return -1;
+        }
+    }
+
+    if (writingMsgQueue != -1) {
+        if (msgctl(writingMsgQueue, IPC_RMID, NULL) == -1) {
+            printf("BOAT W The queue failed to be closed\n");
+            return -1;
+        }
+    }
 
     return 0;
 }

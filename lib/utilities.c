@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <math.h>
+#include <errno.h>
 
 #include "models.h"
 
@@ -56,4 +57,33 @@ Coordinates getCornerCoordinates(double maxX, double maxY, int num) {
 int getRandomValue(int min, int max) {
 
     return (rand() / (RAND_MAX / (max - (min - 1)))) + min;
+}
+
+long getNanoSeconds(double timeInSeconds) {
+    double d, f;
+    f = modf(timeInSeconds, &d);
+    return f * pow(10, 9);
+}
+
+int safeWait(int timeToSleepSec, long timeToSleepNs) {
+
+    struct timespec ts1, ts2;
+    ts1.tv_sec = timeToSleepSec;
+    ts1.tv_nsec = timeToSleepNs;
+
+    int sleepStatus;
+    do {
+        errno = NULL; 
+        sleepStatus = nanosleep(&ts1 , &ts2);
+        if (&ts2 == NULL) {
+            break;
+        }
+        ts1 = ts2;
+    } while (sleepStatus == -1 && errno == EINTR);
+    if (errno != EINTR && errno != 0) {
+        printf("Nano sleep system call failed errno: %d\n", errno);
+        return -1;
+    }
+
+    return 0;
 }

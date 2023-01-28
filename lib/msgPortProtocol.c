@@ -10,17 +10,24 @@
 #include "msgPortProtocol.h"
 
 size_t MAX_BUFFER_PORT_MSG = sizeof(int) * 3;
+int runningStatus = 1;
+
+/* Set the status of the simulation */
+void setRunningStatus(int status) {
+    printf("=== Setted status to %d ===\n", status);
+    runningStatus = status;
+}
 
 /* Send a message to the queue, eturn 0 if ok otherwise -1 */
 int sendMessage(int msgQueueId, ProtocolActions action, int data1, int data2) {
-
+    
     PortMessage pMsg;
     pMsg.msgType = 1;
     pMsg.msg.data.action = action;
     pMsg.msg.data.data1 = data1;
     pMsg.msg.data.data2 = data2;
 
-    if (msgsnd(msgQueueId, &pMsg, MAX_BUFFER_PORT_MSG, 0) == -1) {
+    if (msgsnd(msgQueueId, &pMsg, MAX_BUFFER_PORT_MSG, 0) == -1 && runningStatus == 1) {
         printf("Error during sending of the message errno:%d\n", errno);
         return -1;
     }
@@ -30,16 +37,24 @@ int sendMessage(int msgQueueId, ProtocolActions action, int data1, int data2) {
 
 /* Set the message with the first message in the queue */
 /* Return 0 if ok, -1 if some error occurred and -2 if no message was found */
-int reciveMessage(int msgQueueId, PortMessage* pMsg, int flag) {
+int receiveMessage(int msgQueueId, PortMessage* pMsg, int flag) {
 
     long int msgToRec = 0;
     bzero(pMsg, sizeof(PortMessage));
-    if (msgrcv(msgQueueId, pMsg, MAX_BUFFER_PORT_MSG, msgToRec, flag) == -1) {
-        if (errno == ENOMSG) {
-            /* No message in the queue */
-            return -2;
+
+    int msgStatus;
+    do {
+        errno = NULL;
+        msgStatus = msgrcv(msgQueueId, pMsg, MAX_BUFFER_PORT_MSG, msgToRec, flag);
+        if (runningStatus == 0) {
+            break;
         }
-        printf("Error during retriving the message, errno: %d\n", errno);
+    } while (msgStatus == -1 && errno == EINTR);
+    if (errno == ENOMSG) {
+        /* No message in the queue */
+        return -2;
+    } else if (errno != EINTR && errno != 0 && runningStatus == 1) {
+        printf("Error during retrieving the message, errno: %d\n", errno);
         return -1;
     }
 

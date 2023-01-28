@@ -17,6 +17,10 @@
 
 #include "master.h"
 
+int configShareMemoryId;
+int goodShareMemoryId;
+int portShareMemoryId;
+
 int NUM_OF_SETTINGS = 13;
 int* configArr;
 
@@ -31,7 +35,7 @@ int main() {
     setpgid(getpid(), getpid());
 
     /* ----- CONFIG ----- */
-    int configShareMemoryId = generateShareMemory(sizeof(int) * NUM_OF_SETTINGS);
+    configShareMemoryId = generateShareMemory(sizeof(int) * NUM_OF_SETTINGS);
     if (configShareMemoryId == -1) {
         printf("Error during creation of shared memory for config\n");
         exit(1);
@@ -50,7 +54,7 @@ int main() {
 
 
     /* ----- GOODS ----- */
-    int goodShareMemoryId = generateShareMemory(sizeof(Goods) * configArr[SO_MERCI]);
+    goodShareMemoryId = generateShareMemory(sizeof(Goods) * configArr[SO_MERCI]);
     if (goodShareMemoryId == -1) {
         printf("Error during creation of shared memory for goods\n");
         exit(4);
@@ -62,7 +66,7 @@ int main() {
 
 
     /* ----- PORTS ----- */
-    int portShareMemoryId = generateShareMemory(sizeof(Port) * configArr[SO_PORTI]);
+    portShareMemoryId = generateShareMemory(sizeof(Port) * configArr[SO_PORTI]);
     if (portShareMemoryId == -1) {
         printf("Error during creation of shared memory for ports\n");
         exit(6);
@@ -86,8 +90,8 @@ int main() {
     }
 
     /* Array of pointers of shared memory segment */
-    int arrOfPointerId[] = {configShareMemoryId, goodShareMemoryId, portShareMemoryId}; 
-    if (cleanup(arrOfPointerId, sizeof(arrOfPointerId) / sizeof(int)) == -1) {
+
+    if (cleanup() == -1) {
         printf("Cleanup failed\n");
         exit(10);
     }
@@ -123,20 +127,25 @@ int work() {
     int simulationDays = configArr[SO_DAYS];
 
     killpg(getpid(), SIGUSR1);
-    
+
     while (simulationDays > 0)
     {
         printf("Starting day %d\n", simulationDays);
         simulationDays--;
 
-        sleep(5);
-        killpg(getpid(), SIGUSR2);
+        if (safeWait(1, 0l) == -1) {
+            printf("Error while waiting next day master\n");
+            return -1;
+        }
+
+        if (simulationDays > 0) {
+            killpg(getpid(), SIGUSR2);
+        }
     }
-    
-    printf("Simulation finished\n");
 
     killpg(getpid(), SIGTERM);
-    sleep(1);
+    printf("Simulation finished\n");
+    sleep(2);
 
     return 0;
 }
@@ -242,6 +251,11 @@ int generateGoods(int goodShareMemoryId) {
         arr[i] = good;
     }
 
+    if (shmdt(arr) == -1) {
+        printf("The init good arr detach failed\n");
+        return -1;
+    }
+
     return 0;
 }
 
@@ -269,13 +283,21 @@ int generateSemaphore() {
     return 0;
 }
 
-int cleanup(int pointerIdArr[], int size) {
-    int i = 0;
-    for (i = 0; i < size; i++) {
-        if (shmctl(pointerIdArr[i], IPC_RMID, NULL) == -1) {
-            printf("The shared memory failed to be closed\n");
-            return -1;
-        }
+int cleanup() {
+
+    if (shmctl(configShareMemoryId, IPC_RMID, NULL) == -1) {
+        printf("The shared memory failed to be closed\n");
+        return -1;
+    }
+
+    if (shmctl(goodShareMemoryId, IPC_RMID, NULL) == -1) {
+        printf("The shared memory failed to be closed\n");
+        return -1;
+    }
+
+    if (shmctl(portShareMemoryId, IPC_RMID, NULL) == -1) {
+        printf("The shared memory failed to be closed\n");
+        return -1;
     }
 
     return 0;

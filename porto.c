@@ -5,6 +5,7 @@
 #include <unistd.h>   
 #include <sys/shm.h>  
 #include <sys/msg.h>   
+#include <errno.h>
 
 #include <semaphore.h>
 #include <fcntl.h>      
@@ -45,6 +46,7 @@ void handle_port_newDay() {
 
 void handle_port_stopSimulation() {
 
+    runningStatus = 0;
     simulationRunning = 0;
 }
 
@@ -70,7 +72,6 @@ int main(int argx, char* argv[]) {
         exit(3);
     }
 
-    printf("Starting PORT clear\n");
     if (cleanup() == -1) {
         printf("Cleanup failed\n");
         exit(4);
@@ -169,6 +170,11 @@ int initializePortStruct(char* portIdString, char* portShareMemoryIdS) {
 
     arr[port.id] = port;
 
+    if (shmdt(arr) == -1) {
+        printf("The arr init port detach failed\n");
+        return -1;
+    }
+
     return 0;
 }
 
@@ -223,6 +229,16 @@ int initializeExchangeGoods() {
         goodRequested.state = In_The_Port;
 
         arrReques[i] = goodRequested;
+    }
+
+    if (shmdt(arrStock) == -1) {
+        printf("The arr stock detach failed\n");
+        return -1;
+    }
+
+    if (shmdt(arrReques) == -1) {
+        printf("The arr request detach failed\n");
+        return -1;
     }
 
     return 0;
@@ -317,6 +333,21 @@ int initializePortGoods(char* goodShareMemoryIdS) {
         return -1;
     }
 
+    if (shmdt(arr) == -1) {
+        printf("The arr goods detach failed\n");
+        return -1;
+    }
+
+    if (shmdt(arrStock) == -1) {
+        printf("The arr stock detach failed\n");
+        return -1;
+    }
+
+    if (shmdt(arrReques) == -1) {
+        printf("The arr request detach failed\n");
+        return -1;
+    }
+
     return 0;
 }
 
@@ -338,7 +369,8 @@ int work() {
     while (simulationRunning == 1)
     {
         PortMessage setupMsg;
-        int setupMsgStatus = reciveMessage(port.msgQueuId, &setupMsg, IPC_NOWAIT);
+        int setupMsgStatus = receiveMessage(port.msgQueuId, &setupMsg, IPC_NOWAIT);
+
         if (setupMsgStatus == -1) {
             printf("Error during reciving message from boat\n");
             return -1;
@@ -363,8 +395,8 @@ int work() {
             int readingMsgQueue = queues[0][j];
             int writingMsgQueue = queues[1][j];
 
-            PortMessage recivedMsg;
-            int msgStatus = reciveMessage(readingMsgQueue, &recivedMsg, 0);
+            PortMessage receivedMsg;
+            int msgStatus = receiveMessage(readingMsgQueue, &receivedMsg, 0);
 
             if (msgStatus == -1) {
                 printf("Error during reciving message from boat\n");
@@ -374,7 +406,7 @@ int work() {
             if (msgStatus == 0) {
                 
                 /* New message */
-                switch (recivedMsg.msg.data.action)
+                switch (receivedMsg.msg.data.action)
                 {
                     case PA_ACCEPT:
                         if (handlePA_ACCEPT(writingMsgQueue) == -1) {
@@ -430,6 +462,11 @@ int newDay() {
         }
     }
 
+    if (shmdt(arrStock) == -1) {
+        printf("The arr stock detach failed\n");
+        return -1;
+    }
+
     /* TODO Dealy dump */
 
     return 0;
@@ -457,7 +494,7 @@ int handlePA_SE_GOOD(int queueId) {
 
     /* The boat want to sell some goods */
     if (sendMessage(queueId, PA_Y, goodRequestShareMemoryId, goodRequestShareMemoryId) == -1) {
-            printf("Error during send SE_GOOD\n");
+            printf("Error during send SE_GOOD errno: %d\n", errno);
             return -1;
         }
     
@@ -468,7 +505,7 @@ int handlePA_RQ_GOOD(int queueId) {
 
     /* The boat want to buy some goods */
     if (sendMessage(queueId, PA_Y, goodStockShareMemoryId, goodStockShareMemoryId) == -1) {
-            printf("Error during send RQ_GOOD\n");
+            printf("Error during send RQ_GOOD errno: %d\n", errno);
             return -1;
         }
 
@@ -523,8 +560,13 @@ int generateSemaphore(int semKey) {
 
 int cleanup() {
     
+    if (shmdt(configArr) == -1) {
+        printf("The conf arr detach failed\n");
+        return -1;
+    }
+
     if (msgctl(port.msgQueuId, IPC_RMID, NULL) == -1) {
-        printf("The queue failed to be closed\n");
+        printf("PORT The queue failed to be closed\n");
         return -1;
     }
 
