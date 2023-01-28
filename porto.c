@@ -134,15 +134,21 @@ int initializePort(char* portIdString, char* portShareMemoryIdS, char* goodShare
 }
 
 int initializePortStruct(char* portIdString, char* portShareMemoryIdS) {
-    
+        
+    char* p;
+    int portId = strtol(portIdString, &p, 10);
+
     /* Generate a message queue to comunicate with the boats */
-    int portMsgId = msgget(IPC_PRIVATE, 0600);
+    char queueKey[12];
+    if (sprintf(queueKey, "%d", portId) == -1) {
+        printf("Error during conversion of the port id to a string\n");
+        return -1;
+    }
+
+    int portMsgId = msgget(ftok(queueKey, 'X'), IPC_CREAT | 0600);
     if (portMsgId == -1) {
         return -1;
     }
-    
-    char* p;
-    int portId = strtol(portIdString, &p, 10);
 
     port.id = portId;
     port.msgQueuId = portMsgId;
@@ -321,7 +327,8 @@ int work() {
     while (simulationRunning == 1)
     {
         PortMessage recivedMsg;
-        int msgStatus = reciveMessage(port.msgQueuId, &recivedMsg);
+        int msgStatus = reciveMessage(port.msgQueuId, PORT_RECEIVER, &recivedMsg);
+
         if (msgStatus == -1) {
             printf("Error during reciving message from boat\n");
             return -1;
@@ -367,8 +374,6 @@ int work() {
 
 int newDay() {
 
-    printf("Recived port new day\n"); 
-
     Goods* arrStock = (Goods*) shmat(goodStockShareMemoryId, NULL, 0);
     if (arrStock == (void*) -1) {
         printf("Error while opening stock good\n");
@@ -391,15 +396,15 @@ int newDay() {
 }
 
 int handlePA_ACCEPT(PortMessage recivedMsg) {
-
+    printf("Handle ACCEPT request\n");
     if (port.availableQuays > 0) {
-        if (sendMessage(port.msgQueuId, recivedMsg.msg.data.id, PA_Y, -1, -1) == -1) {
+        if (sendMessage(port.msgQueuId, recivedMsg.msg.data.id, BOAT_RECEIVER, PA_Y, -1, -1) == -1) {
             printf("Error during send ACCEPT\n");
             return -1;
         }
         port.availableQuays--;
     } else {
-        if (sendMessage(port.msgQueuId, recivedMsg.msg.data.id, PA_N, -1, -1) == -1) {
+        if (sendMessage(port.msgQueuId, recivedMsg.msg.data.id, BOAT_RECEIVER, PA_N, -1, -1) == -1) {
             printf("Error during send ACCEPT\n");
             return -1;
         }
@@ -410,7 +415,7 @@ int handlePA_ACCEPT(PortMessage recivedMsg) {
 
 int handlePA_SE_GOOD(PortMessage recivedMsg) {
     /* The boat want to sell some goods */
-    if (sendMessage(port.msgQueuId, recivedMsg.msg.data.id, PA_Y, 
+    if (sendMessage(port.msgQueuId, recivedMsg.msg.data.id, BOAT_RECEIVER, PA_Y, 
         goodRequestShareMemoryId, goodRequestShareMemoryId) == -1) {
             printf("Error during send SE_GOOD\n");
             return -1;
@@ -421,7 +426,7 @@ int handlePA_SE_GOOD(PortMessage recivedMsg) {
 
 int handlePA_RQ_GOOD(PortMessage recivedMsg) {
     /* The boat want to buy some goods */
-    if (sendMessage(port.msgQueuId, recivedMsg.msg.data.id, PA_Y, 
+    if (sendMessage(port.msgQueuId, recivedMsg.msg.data.id, BOAT_RECEIVER, PA_Y, 
         goodStockShareMemoryId, goodStockShareMemoryId) == -1) {
             printf("Error during send RQ_GOOD\n");
             return -1;

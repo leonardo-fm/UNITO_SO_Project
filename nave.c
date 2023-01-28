@@ -33,7 +33,7 @@ Goods* goodHold;
 int startSimulation = 0;
 int simulationRunning = 1;
 
-void handle_boat_start(int num) {
+void handle_boat_start() {
 
     startSimulation = 1;
 }
@@ -69,7 +69,7 @@ int main(int argx, char* argv[]) {
         printf("Error during boat %d work\n", boat.id);
         exit(3);
     }
-
+    
     if (cleanup() == -1) {
         printf("Cleanup failed\n");
         exit(4);
@@ -81,7 +81,6 @@ int main(int argx, char* argv[]) {
 int initializeSingalsHandlers() {
 
     setpgid(getpid(), getppid());
-    printf("listening on id: %d\n", getppid());
 
     struct sigaction sa1;
     sa1.sa_flags = SA_RESTART;
@@ -149,7 +148,6 @@ int work() {
     /* wait for simulation to start */
     while (startSimulation == 0) { };
 
-    printf("AAAAAAAAAAAAAAAAAAA\n");
     while (simulationRunning == 1)
     {
         if (gotoPort() == -1) {
@@ -225,24 +223,29 @@ int openTrade(int portId) {
         printf("The old comunication with id %d was not closed properly\n", currentMsgQueueId);
         return -1;
     }
-
-    currentMsgQueueId = msgget((key_t) portId, IPC_CREAT | 0600);
-
-    if (sendMessage(currentMsgQueueId, boat.id, PA_ACCEPT, 0, 0) == -1) {
-        printf("Failed to send ACCEPT comunication\n");
+    
+    char queueKey[12];
+    if (sprintf(queueKey, "%d", portId) == -1) {
+        printf("Error during conversion of the port id to a string\n");
         return -1;
     }
 
+    currentMsgQueueId = msgget(ftok(queueKey, 'X'), IPC_CREAT | 0600);
+    if (sendMessage(currentMsgQueueId, boat.id, PORT_RECEIVER, PA_ACCEPT, 0, 0) == -1) {
+        printf("Failed to send ACCEPT comunication\n");
+        return -1;
+    }
+    printf("Sent ACCEPT request\n");
     int waitResponse = 1;
     PortMessage response;
     while (waitResponse == 1) {
         
-        int msgResponse = reciveMessageById(currentMsgQueueId, boat.id, &response);
+        int msgResponse = reciveMessageById(currentMsgQueueId, boat.id, BOAT_RECEIVER, &response);
         if (msgResponse == -1) {
             printf("Error during weating response from ACCEPT\n");
             return -1;
         }
-
+        printf("Message response status: %d\n", msgResponse);
         if (msgResponse == 0) {
             waitResponse = 0;
         }
@@ -287,7 +290,7 @@ int trade() {
 
 int closeTrade() {
 
-    if (sendMessage(currentMsgQueueId, boat.id, PA_EOT, 0, 0) == -1) {
+    if (sendMessage(currentMsgQueueId, boat.id, PORT_RECEIVER, PA_EOT, 0, 0) == -1) {
         printf("Failed to send EOT comunication\n");
         return -1;
     }
@@ -329,7 +332,7 @@ int haveIGoodsToBuy() {
 int sellGoods() {
 
     /* Send request to sell */
-    if (sendMessage(currentMsgQueueId, boat.id, PA_SE_GOOD, 0, 0) == -1) {
+    if (sendMessage(currentMsgQueueId, boat.id, PORT_RECEIVER, PA_SE_GOOD, 0, 0) == -1) {
         printf("Failed to send PA_SE_GOOD comunication\n");
         return -1;
     }
@@ -339,7 +342,7 @@ int sellGoods() {
     PortMessage response;
     while (waitResponse == 1) {
         
-        int msgResponse = reciveMessageById(currentMsgQueueId, boat.id, &response);
+        int msgResponse = reciveMessageById(currentMsgQueueId, boat.id, BOAT_RECEIVER, &response);
         if (msgResponse == -1) {
             printf("Error during weating response from PA_SE_GOOD\n");
             return -1;
@@ -418,7 +421,7 @@ int sellGoods() {
 int buyGoods() {
 
     /* Send request to buy */
-    if (sendMessage(currentMsgQueueId, boat.id, PA_RQ_GOOD, 0, 0) == -1) {
+    if (sendMessage(currentMsgQueueId, boat.id, PORT_RECEIVER, PA_RQ_GOOD, 0, 0) == -1) {
         printf("Failed to send PA_RQ_GOOD comunication\n");
         return -1;
     }
@@ -428,7 +431,7 @@ int buyGoods() {
     PortMessage response;
     while (waitResponse == 1) {
         
-        int msgResponse = reciveMessageById(currentMsgQueueId, boat.id, &response);
+        int msgResponse = reciveMessageById(currentMsgQueueId, boat.id, BOAT_RECEIVER, &response);
         if (msgResponse == -1) {
             printf("Error during weating response from PA_RQ_GOOD\n");
             return -1;

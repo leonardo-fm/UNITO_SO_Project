@@ -97,7 +97,7 @@ int main() {
 
 int initializeSingalsHandlers() {
 
-    setpgid(getpid(), getppid());
+    setpgrp();
 
     struct sigaction sa1;
     sa1.sa_flags = SA_RESTART;
@@ -118,37 +118,24 @@ int initializeSingalsHandlers() {
 }
 
 int work() {
+
     printf("Master pid: %d\n", getpid());
     int simulationDays = configArr[SO_DAYS];
-    int id = fork();
-    if (id == 0) {
-        killpg(getppid(), SIGUSR1);
-        printf("Sended signal brodcast to id: %d\n", getppid());
-        exit(11);
-    }
 
+    killpg(getpid(), SIGUSR1);
+    
     while (simulationDays > 0)
     {
         printf("Starting day %d\n", simulationDays);
         simulationDays--;
 
-        sleep(1);
-
-        id = fork();
-        if (id == 0) {
-            killpg(getppid(), SIGUSR2);
-            exit(12);
-        }
+        sleep(10);
+        killpg(getpid(), SIGUSR2);
     }
     
     printf("Simulation finished\n");
 
-    id = fork();
-    if (id == 0) {
-        killpg(getppid(), SIGTERM);
-        exit(13);
-    }
-
+    killpg(getpid(), SIGTERM);
     sleep(1);
 
     return 0;
