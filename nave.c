@@ -26,6 +26,8 @@ int* configArr;
 int portSharedMemoryPointer; 
 int currentMsgQueueId = -1;
 int currentPort = -1;
+int readingMsgQueue = -1;
+int writingMsgQueue = -1;
 
 Boat boat;
 Goods* goodHold;
@@ -70,6 +72,7 @@ int main(int argx, char* argv[]) {
         exit(3);
     }
     
+    printf("Starting BOAT clear\n");
     if (cleanup() == -1) {
         printf("Cleanup failed\n");
         exit(4);
@@ -155,7 +158,12 @@ int work() {
             return -1;
         }
 
-        int tradeStatus = openTrade(currentPort);
+        if (setupTrade(currentPort) == -1) {
+            printf("Error during setup for the trade\n");
+            return -1;
+        }
+
+        int tradeStatus = openTrade();
         if (tradeStatus == -1) {
             printf("Error during trade\n");
             return -1;
@@ -188,7 +196,7 @@ int gotoPort() {
 
     int newPortFound = 0;
 
-    Coordinates* arr = (Coordinates*) shmat(portSharedMemoryPointer, NULL, 0);
+    Port* arr = (Port*) shmat(portSharedMemoryPointer, NULL, 0);
     if (arr == (void*) -1) {
         printf("Error during opening ports coordinate share memory\n");
         return -1;
@@ -204,8 +212,8 @@ int gotoPort() {
         }
     }
 
-    double num = (double)(((arr[currentPort].x - boat.position.x) * (arr[currentPort].x - boat.position.x))) 
-        + (double)(((arr[currentPort].y - boat.position.y) * (arr[currentPort].y - boat.position.y)));
+    double num = (double)(((arr[currentPort].position.x - boat.position.x) * (arr[currentPort].position.x - boat.position.x))) 
+        + (double)(((arr[currentPort].position.y - boat.position.y) * (arr[currentPort].position.y - boat.position.y)));
     double distance = sqrt(num);
 
     if (waitExchange(distance / configArr[SO_SPEED]) == -1) {
@@ -216,36 +224,50 @@ int gotoPort() {
     return 0;
 }
 
-/* Return 0 if the trade is a success, 1 if the port refuse to accept the boat, -1 for errors */
-int openTrade(int portId) {
+int setupTrade(int portId) {
+
+    readingMsgQueue = msgget(IPC_PRIVATE, IPC_CREAT | 0600);
+    writingMsgQueue = msgget(IPC_PRIVATE, IPC_CREAT | 0600);
 
     if (currentMsgQueueId != -1) {
         printf("The old comunication with id %d was not closed properly\n", currentMsgQueueId);
         return -1;
     }
     
-    char queueKey[12];
-    if (sprintf(queueKey, "%d", portId) == -1) {
-        printf("Error during conversion of the port id to a string\n");
+    Port* arr = (Port*) shmat(portSharedMemoryPointer, NULL, 0);
+    if (arr == (void*) -1) {
+        printf("Error during opening ports coordinate share memory\n");
         return -1;
     }
 
-    currentMsgQueueId = msgget(ftok(queueKey, 'X'), IPC_CREAT | 0600);
-    if (sendMessage(currentMsgQueueId, boat.id, PORT_RECEIVER, PA_ACCEPT, 0, 0) == -1) {
+    currentMsgQueueId = arr[portId].msgQueuId;
+
+    if (sendMessage(currentMsgQueueId, PA_SETUP, writingMsgQueue, readingMsgQueue) == -1) {
+        printf("Failed to send SETUP comunication\n");
+        return -1;
+    }
+
+    return 0;
+}
+
+/* Return 0 if the trade is a success, 1 if the port refuse to accept the boat, -1 for errors */
+int openTrade() {
+
+    if (sendMessage(writingMsgQueue, PA_ACCEPT, 0, 0) == -1) {
         printf("Failed to send ACCEPT comunication\n");
         return -1;
     }
-    printf("Sent ACCEPT request\n");
+    
     int waitResponse = 1;
     PortMessage response;
     while (waitResponse == 1) {
         
-        int msgResponse = reciveMessageById(currentMsgQueueId, boat.id, BOAT_RECEIVER, &response);
+        int msgResponse = reciveMessage(readingMsgQueue, &response, 0);
         if (msgResponse == -1) {
             printf("Error during weating response from ACCEPT\n");
             return -1;
         }
-        printf("Message response status: %d\n", msgResponse);
+
         if (msgResponse == 0) {
             waitResponse = 0;
         }
@@ -274,6 +296,7 @@ int trade() {
     }
 
     if (haveIGoodsToBuy() == 0) {
+
         if (buyGoods() == -1) {
             printf("Error during buying goods\n");
             return -1;
@@ -290,12 +313,14 @@ int trade() {
 
 int closeTrade() {
 
-    if (sendMessage(currentMsgQueueId, boat.id, PORT_RECEIVER, PA_EOT, 0, 0) == -1) {
+    if (sendMessage(writingMsgQueue, PA_EOT, 0, 0) == -1) {
         printf("Failed to send EOT comunication\n");
         return -1;
     }
 
     currentMsgQueueId = -1;
+    readingMsgQueue = -1;
+    writingMsgQueue = -1;
 
     return 0;
 }
@@ -332,7 +357,7 @@ int haveIGoodsToBuy() {
 int sellGoods() {
 
     /* Send request to sell */
-    if (sendMessage(currentMsgQueueId, boat.id, PORT_RECEIVER, PA_SE_GOOD, 0, 0) == -1) {
+    if (sendMessage(writingMsgQueue, PA_SE_GOOD, 0, 0) == -1) {
         printf("Failed to send PA_SE_GOOD comunication\n");
         return -1;
     }
@@ -342,7 +367,7 @@ int sellGoods() {
     PortMessage response;
     while (waitResponse == 1) {
         
-        int msgResponse = reciveMessageById(currentMsgQueueId, boat.id, BOAT_RECEIVER, &response);
+        int msgResponse = reciveMessage(readingMsgQueue, &response, 0);
         if (msgResponse == -1) {
             printf("Error during weating response from PA_SE_GOOD\n");
             return -1;
@@ -359,7 +384,7 @@ int sellGoods() {
 
     /* Get semaphore */
     char semaphoreKey[12];
-    if (sprintf(semaphoreKey, "%d", response.msg.data.semaphoreKey) == -1) {
+    if (sprintf(semaphoreKey, "%d", response.msg.data.data2) == -1) {
         printf("Error during conversion of the pid for semaphore to a string\n");
         return -1;
     }   
@@ -371,7 +396,7 @@ int sellGoods() {
     }
 
     /* Get shared memory of the port */
-    Goods* arr = (Goods*) shmat(response.msg.data.sharedMemoryId, NULL, 0);
+    Goods* arr = (Goods*) shmat(response.msg.data.data1, NULL, 0);
     if (arr == (void*) -1) {
         printf("Error opening goods shared memory\n");
         return -1;
@@ -421,7 +446,7 @@ int sellGoods() {
 int buyGoods() {
 
     /* Send request to buy */
-    if (sendMessage(currentMsgQueueId, boat.id, PORT_RECEIVER, PA_RQ_GOOD, 0, 0) == -1) {
+    if (sendMessage(writingMsgQueue, PA_RQ_GOOD, 0, 0) == -1) {
         printf("Failed to send PA_RQ_GOOD comunication\n");
         return -1;
     }
@@ -431,7 +456,7 @@ int buyGoods() {
     PortMessage response;
     while (waitResponse == 1) {
         
-        int msgResponse = reciveMessageById(currentMsgQueueId, boat.id, BOAT_RECEIVER, &response);
+        int msgResponse = reciveMessage(readingMsgQueue, &response, 0);
         if (msgResponse == -1) {
             printf("Error during weating response from PA_RQ_GOOD\n");
             return -1;
@@ -448,7 +473,7 @@ int buyGoods() {
 
     /* Get semaphore */
     char semaphoreKey[12];
-    if (sprintf(semaphoreKey, "%d", response.msg.data.semaphoreKey) == -1) {
+    if (sprintf(semaphoreKey, "%d", response.msg.data.data2) == -1) {
         printf("Error during conversion of the pid for semaphore to a string\n");
         return -1;
     }   
@@ -460,7 +485,7 @@ int buyGoods() {
     }
 
     /* Get shared memory of the port */
-    Goods* arr = (Goods*) shmat(response.msg.data.sharedMemoryId, NULL, 0);
+    Goods* arr = (Goods*) shmat(response.msg.data.data1, NULL, 0);
     if (arr == (void*) -1) {
         printf("Error opening goods shared memory\n");
         return -1;

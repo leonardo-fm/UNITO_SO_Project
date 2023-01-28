@@ -62,7 +62,7 @@ int main() {
 
 
     /* ----- PORTS ----- */
-    int portShareMemoryId = generateShareMemory(sizeof(Coordinates) * configArr[SO_PORTI]);
+    int portShareMemoryId = generateShareMemory(sizeof(Port) * configArr[SO_PORTI]);
     if (portShareMemoryId == -1) {
         printf("Error during creation of shared memory for ports\n");
         exit(6);
@@ -129,7 +129,7 @@ int work() {
         printf("Starting day %d\n", simulationDays);
         simulationDays--;
 
-        sleep(10);
+        sleep(5);
         killpg(getpid(), SIGUSR2);
     }
     
