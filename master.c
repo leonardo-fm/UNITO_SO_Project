@@ -23,7 +23,7 @@ int *configArr;
 
 void handle_master_stopProcess() { 
 
-    printf("Stopping program...\n");
+    printf("\nStopping program...\n");
     killpg(getpid(), SIGINT);
     cleanup();
     exit(0);
@@ -50,7 +50,6 @@ int main() {
     if (loadConfig(configShareMemoryId) == -1) {
         exit(3);
     }
-
 
     /* ----- GOODS ----- */
     goodShareMemoryId = generateShareMemory(sizeof(Goods) * configArr[SO_MERCI]);
@@ -82,14 +81,11 @@ int main() {
     }
 
 
-    sleep(1); /*TODO DA TOGLIERE*/
     /* ----- START SIMULATION ----- */
     if (work() == -1) {
         printf("Error during master work\n");
         exit(9);
     }
-
-    /* Array of pointers of shared memory segment */
 
     if (cleanup() == -1) {
         printf("Cleanup failed\n");

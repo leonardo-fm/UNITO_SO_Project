@@ -6,6 +6,7 @@ int initializeExchangeGoods();
 int initializePortGoods(char *goodShareMemoryIdS);
 int work();
 int newDay();
+int waitForStart();
 int handlePA_EOT();
 int generateShareMemory(int sizeOfSegment);
 int generateSemaphore(int semKey);

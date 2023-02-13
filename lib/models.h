@@ -3,8 +3,8 @@
 /* OTHER */
 
 typedef struct {
-    double x;
-    double y;
+    int x;
+    int y;
 } Coordinates;
 
 typedef enum {

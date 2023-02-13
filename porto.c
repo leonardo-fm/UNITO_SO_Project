@@ -32,7 +32,6 @@ int goodRequestShareMemoryId;
 Port port;
 Goods **goodExchange;
 
-int startSimulation = 0;
 int simulationRunning = 1;
 
 void handle_port_simulation_signals(int signal) {
@@ -41,7 +40,6 @@ void handle_port_simulation_signals(int signal) {
     {
         /* Start of the simulation */
         case SIGUSR1:
-            startSimulation = 1;
             break;
             
         /* New day of simulation */
@@ -55,13 +53,13 @@ void handle_port_simulation_signals(int signal) {
             simulationRunning = 0;
             break;
         default:
+            printf("Intercept a unhandled signal: %d\n", signal);
             break;
     }
 }
 
 void handle_port_stopProcess() {
 
-    printf("Stopping port...\n");
     cleanup();
     exit(0);
 }
@@ -385,7 +383,10 @@ int work() {
     int *queues[2];
     
     /* wait for simulation to start */
-    while (startSimulation == 0) { };
+    if (waitForStart() != 0) {
+        printf("Error while waiting for start\n");
+        return -1;
+    }
 
     /* queue[0][n] read queue | queue[1][n] write queue */
     maxQauys = port.availableQuays;
@@ -479,6 +480,17 @@ int work() {
     free(queues[1]);
 
     return 0;
+}
+
+int waitForStart() {
+
+    int sig, waitRes;
+    sigset_t sigset;
+
+    sigaddset(&sigset, SIGUSR1);
+    waitRes = sigwait(&sigset, &sig);
+
+    return waitRes;
 }
 
 int newDay() {

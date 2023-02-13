@@ -18,13 +18,13 @@ void initializeEnvironment() {
 Coordinates getRandomCoordinates(double maxX, double maxY) {
 
     Coordinates coordinates;
-    coordinates.x = (double) rand() / (double) (RAND_MAX / maxX);
-    coordinates.y = (double) rand() / (double) (RAND_MAX / maxY);
+    coordinates.x = rand() / (RAND_MAX / maxX);
+    coordinates.y = rand() / (RAND_MAX / maxY);
     return coordinates;
 }
 
 /* Generates corner coordinates given the dimensions of a plane. */
-Coordinates getCornerCoordinates(double maxX, double maxY, int num) {
+Coordinates getCornerCoordinates(int maxX, int maxY, int num) {
 
     Coordinates coordinates;
     switch (num) {

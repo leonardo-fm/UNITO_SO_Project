@@ -2,6 +2,7 @@ int initializeSingalsHandlers();
 int initializeConfig(char *configShareMemoryIdString);
 int initializeBoat(char *boatIdS, char *shareMemoryIdS);
 int work();
+int waitForStart();
 int newDay();
 int gotoPort();
 int setupTrade(int portId);

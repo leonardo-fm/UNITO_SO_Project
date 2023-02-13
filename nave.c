@@ -33,7 +33,6 @@ int writingMsgQueue = -1;
 Boat boat;
 Goods *goodHold;
 
-int startSimulation = 0;
 int simulationRunning = 1;
 
 void handle_boat_simulation_signals(int signal) {
@@ -42,7 +41,6 @@ void handle_boat_simulation_signals(int signal) {
     {
         /* Start of the simulation */
         case SIGUSR1:
-            startSimulation = 1;
             break;
             
         /* New day of simulation */
@@ -56,13 +54,13 @@ void handle_boat_simulation_signals(int signal) {
             simulationRunning = 0;
             break;
         default:
+            printf("Intercept a unhandled signal: %d\n", signal);
             break;
     }
 }
 
 void handle_boat_stopProcess() {
     
-    printf("Stopping boat...\n");
     cleanup();
     exit(0);
 }
@@ -162,8 +160,10 @@ int initializeBoat(char *boatIdS, char *shareMemoryIdS) {
 int work() {
 
     /* wait for simulation to start */
-    /* TODO Mandare fuori dalla cpu */
-    while (startSimulation == 0) { };
+    if (waitForStart() != 0) {
+        printf("Error while waiting for start\n");
+        return -1;
+    }
 
     while (simulationRunning == 1)
     {   
@@ -189,6 +189,17 @@ int work() {
     return 0;
 }
 
+int waitForStart() {
+
+    int sig, waitRes;
+    sigset_t sigset;
+
+    sigaddset(&sigset, SIGUSR1);
+    waitRes = sigwait(&sigset, &sig);
+
+    return waitRes;
+}
+
 int newDay() {
 
     int i = 0;
@@ -212,10 +223,6 @@ int gotoPort() {
     Port *portArr;
     double num, distance;
     long waitTimeNs;
-
-    if (simulationRunning == 0) {
-        return 0;
-    }
 
     portArr = (Port*) shmat(portSharedMemoryPointer, NULL, 0);
     if (portArr == (void*) -1) {
@@ -255,10 +262,6 @@ int setupTrade(int portId) {
 
     Port *portArr;
 
-    if (simulationRunning == 0) {
-        return 0;
-    }
-
     readingMsgQueue = msgget(IPC_PRIVATE, IPC_CREAT | 0600);
     writingMsgQueue = msgget(IPC_PRIVATE, IPC_CREAT | 0600);
 
@@ -294,10 +297,6 @@ int openTrade() {
     int waitResponse = 1;
     PortMessage response;
 
-    if (simulationRunning == 0) {
-        return 0;
-    }
-
     if (sendMessage(writingMsgQueue, PA_ACCEPT, 0, 0) == -1) {
         printf("Failed to send ACCEPT comunication\n");
         return -1;
@@ -314,10 +313,6 @@ int openTrade() {
         if (msgResponse == 0) {
             waitResponse = 0;
         }
-    }
-
-    if (simulationRunning == 0) {
-        return 0;
     }
     
     if (response.msg.data.action == PA_N) {
@@ -439,10 +434,6 @@ int sellGoods() {
         return 0;
     }
 
-    if (simulationRunning == 0) {
-        return 0;
-    }
-
     /* Get semaphore */
     if (sprintf(semaphoreKey, "%d", response.msg.data.data2) == -1) {
         printf("Error during conversion of the pid for semaphore to a string\n");
@@ -541,10 +532,6 @@ int buyGoods() {
     }
 
     if (response.msg.data.action == PA_N) {
-        return 0;
-    }
-
-    if (simulationRunning == 0) {
         return 0;
     }
 
