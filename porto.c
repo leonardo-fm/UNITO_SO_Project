@@ -462,7 +462,7 @@ int work() {
                         };
                         break;
                     case PA_EOT:
-                        if (handlePA_EOT(readingMsgQueue, writingMsgQueue) == -1) {
+                        if (handlePA_EOT(writingMsgQueue) == -1) {
                             printf("Error during EOT handling\n");
                             return -1;
                         };
@@ -547,7 +547,7 @@ int handlePA_SE_GOOD(int queueId) {
     if (sendMessage(queueId, PA_Y, goodRequestShareMemoryId, goodRequestShareMemoryId) == -1) {
             printf("Error during send SE_GOOD errno: %d\n", errno);
             return -1;
-        }
+    }
     
     return 0;
 }
@@ -558,21 +558,17 @@ int handlePA_RQ_GOOD(int queueId) {
     if (sendMessage(queueId, PA_Y, goodStockShareMemoryId, goodStockShareMemoryId) == -1) {
             printf("Error during send RQ_GOOD errno: %d\n", errno);
             return -1;
-        }
+    }
 
     return 0;
 }
 
-int handlePA_EOT(int readQueueId, int writeQueueId) {
+int handlePA_EOT(int writeQueueId) {
 
-    if (msgctl(readQueueId, IPC_RMID, NULL) == -1) {
-        printf("The queue failed to be closed\n");
-        return -1;
-    }
-
-    if (msgctl(writeQueueId, IPC_RMID, NULL) == -1) {
-        printf("The queue failed to be closed\n");
-        return -1;
+    /* The port want to end the trasmission */
+    if (sendMessage(writeQueueId, PA_EOT, 0, 0) == -1) {
+            printf("Error during send RQ_GOOD errno: %d\n", errno);
+            return -1;
     }
 
     port.availableQuays++;

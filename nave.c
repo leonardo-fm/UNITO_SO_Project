@@ -355,15 +355,41 @@ int trade() {
 
 int closeTrade() {
 
+    int waitResponse = 1;
+    PortMessage response;
+
     if (sendMessage(writingMsgQueue, PA_EOT, 0, 0) == -1) {
         printf("Failed to send EOT comunication\n");
         return -1;
     }
 
-    if (simulationRunning == 1) {
+    while (waitResponse == 1 && simulationRunning == 1) {
+        
+        int msgResponse = receiveMessage(readingMsgQueue, &response, 0);
+        if (msgResponse == -1) {
+            printf("Error during weating response from EOT\n");
+            return -1;
+        }
+
+        if (msgResponse == 0) {
+            waitResponse = 0;
+        }
+    }
+
+    if (response.msg.data.action == PA_EOT && simulationRunning == 1) {
 
         currentMsgQueueId = -1;
+
+        if (msgctl(readingMsgQueue, IPC_RMID, NULL) == -1) {
+            printf("The reading queue failed to be closed\n");
+            return -1;
+        }
         readingMsgQueue = -1;
+
+        if (msgctl(writingMsgQueue, IPC_RMID, NULL) == -1) {
+            printf("The writing queue failed to be closed\n");
+            return -1;
+        }
         writingMsgQueue = -1;
     }
 
