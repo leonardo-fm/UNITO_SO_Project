@@ -1,6 +1,6 @@
 int initializeSingalsHandlers();
-int initializeConfig(char* configShareMemoryIdString);
-int initializeBoat(char* boatIdS, char* shareMemoryIdS);
+int initializeConfig(char *configShareMemoryIdString);
+int initializeBoat(char *boatIdS, char *shareMemoryIdS);
 int work();
 int newDay();
 int gotoPort();

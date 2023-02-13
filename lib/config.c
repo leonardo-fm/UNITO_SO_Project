@@ -12,36 +12,40 @@
 /* Return 0 if the configuration has been loaded succesfully, -1 if some errors occurred. */
 int loadConfig(int configShareMemoryId) {
     
-    FILE* filePointer;
+    int *arrConfig;
+    char fileLine[150];
+    int i = 0;
+
+    FILE *filePointer;
     filePointer = fopen("config.txt", "r");
     if (filePointer == NULL) {
         printf("loadingConfig | The file pointer of the config file is null\n");
         return -1;
     }
 
-    int* arr = (int*) shmat(configShareMemoryId, NULL, 0);
-    if (arr == (void*) -1) {
+    arrConfig = (int*) shmat(configShareMemoryId, NULL, 0);
+    if (arrConfig == (void*) -1) {
         return -1;
     }
 
-    int i = 0;
-
-    char fileLine[150];
     while (!feof(filePointer)) {
+        char *configValue;
+        char *p;
+
         if (fgets(fileLine, 150, filePointer) == NULL) {
             printf("loadingConfig | The fgets() result is null\n");
             return -1;
         }
-        char* configValue;
-        char* p;
-        /* Adding the char to the pointer to remove the = */
-        configValue = memchr(fileLine, '=', strlen(fileLine)) + sizeof(char);
+
+        configValue = memchr(fileLine, '=', strlen(fileLine));
+        /* Adding the char to the pointer to remove the '=' */
+        configValue += sizeof(char);
         if (configValue == NULL) {
             printf("loadingConfig | Not found config value\n");
             return -1;
         }
 
-        arr[i] = strtol(configValue, &p, 10);
+        arrConfig[i] = strtol(configValue, &p, 10);
         i++;
     }
 

@@ -20,7 +20,7 @@ typedef enum {
     SO_BANCHINE,
     SO_FILL,
     SO_LOADSPEED,
-    SO_DAYS, 
+    SO_DAYS 
 } ConfigurationVariables;
 
 

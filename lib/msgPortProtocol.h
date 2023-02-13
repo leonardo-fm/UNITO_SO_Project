@@ -5,7 +5,7 @@ typedef enum {
     PA_ACCEPT,      /* Can i use a quay? */   
     PA_SE_GOOD,     /* Sell good */
     PA_RQ_GOOD,     /* Request good */
-    PA_EOT,         /* End of trasmission */     
+    PA_EOT          /* End of trasmission */     
 } ProtocolActions;
 
 typedef struct {
@@ -27,4 +27,4 @@ extern int runningStatus;
 void setRunningStatus(int status);
 
 int sendMessage(int msgQueueId, ProtocolActions action, int data1, int data2);
-int receiveMessage(int msgQueueId, PortMessage* pMsg, int flag); 
+int receiveMessage(int msgQueueId, PortMessage *pMsg, int flag); 

@@ -37,19 +37,24 @@ int sendMessage(int msgQueueId, ProtocolActions action, int data1, int data2) {
 
 /* Set the message with the first message in the queue */
 /* Return 0 if ok, -1 if some error occurred and -2 if no message was found */
-int receiveMessage(int msgQueueId, PortMessage* pMsg, int flag) {
-
-    long int msgToRec = 0;
-    bzero(pMsg, sizeof(PortMessage));
+int receiveMessage(int msgQueueId, PortMessage *pMsg, int flag) {
 
     int msgStatus;
+    long int msgToRec = 0;
+    
+    memset(pMsg, 0, sizeof(PortMessage));
+
     do {
-        errno = NULL;
+        /* Reset errno error */
+        errno = 0;
         msgStatus = msgrcv(msgQueueId, pMsg, MAX_BUFFER_PORT_MSG, msgToRec, flag);
+        
         if (runningStatus == 0) {
             break;
         }
+
     } while (msgStatus == -1 && errno == EINTR);
+
     if (errno == ENOMSG) {
         /* No message in the queue */
         return -2;

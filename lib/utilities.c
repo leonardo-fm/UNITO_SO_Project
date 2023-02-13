@@ -68,18 +68,23 @@ long getNanoSeconds(double timeInSeconds) {
 int safeWait(int timeToSleepSec, long timeToSleepNs) {
 
     struct timespec ts1, ts2;
+    int sleepStatus;
+
     ts1.tv_sec = timeToSleepSec;
     ts1.tv_nsec = timeToSleepNs;
 
-    int sleepStatus;
     do {
-        errno = NULL; 
+        /* Reset errno error */
+        errno = 0; 
+
         sleepStatus = nanosleep(&ts1 , &ts2);
-        if (&ts2 == NULL) {
+        if (sleepStatus == 0) {
             break;
         }
+
         ts1 = ts2;
     } while (sleepStatus == -1 && errno == EINTR);
+    
     if (errno != EINTR && errno != 0) {
         printf("Nano sleep system call failed errno: %d\n", errno);
         return -1;

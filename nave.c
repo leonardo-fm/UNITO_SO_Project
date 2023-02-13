@@ -22,7 +22,7 @@
 #include "nave.h"
 
 int NUM_OF_SETTINGS = 13;
-int* configArr;
+int *configArr;
 
 int portSharedMemoryPointer; 
 int currentMsgQueueId = -1;
@@ -31,7 +31,7 @@ int readingMsgQueue = -1;
 int writingMsgQueue = -1;
 
 Boat boat;
-Goods* goodHold;
+Goods *goodHold;
 
 int startSimulation = 0;
 int simulationRunning = 1;
@@ -53,7 +53,7 @@ void handle_boat_stopSimulation() {
 }
 
 
-int main(int argx, char* argv[]) {
+int main(int argx, char *argv[]) {
 
     (void) argx;
     initializeEnvironment();
@@ -84,19 +84,18 @@ int main(int argx, char* argv[]) {
 
 int initializeSingalsHandlers() {
 
+    struct sigaction sa1, sa2, sa3;
+
     setpgid(getpid(), getppid());
 
-    struct sigaction sa1;
     sa1.sa_flags = SA_RESTART;
     sa1.sa_handler = &handle_boat_start;
     sigaction(SIGUSR1, &sa1, NULL);
 
-    struct sigaction sa2;
     sa2.sa_flags = SA_RESTART;
     sa2.sa_handler = &handle_boat_newDay;
     sigaction(SIGUSR2, &sa2, NULL);
 
-    struct sigaction sa3;
     sa3.sa_flags = SA_RESTART;
     sa3.sa_handler = &handle_boat_stopSimulation;
     sigaction(SIGTERM, &sa3, NULL);
@@ -104,9 +103,9 @@ int initializeSingalsHandlers() {
     return 0;
 }
 
-int initializeConfig(char* configShareMemoryIdString) {
+int initializeConfig(char *configShareMemoryIdString) {
 
-    char* p;
+    char *p;
     int configShareMemoryId = strtol(configShareMemoryIdString, &p, 10);
     configArr = (int*) shmat(configShareMemoryId, NULL, 0);
     if (configArr == (void*) -1) {
@@ -116,9 +115,10 @@ int initializeConfig(char* configShareMemoryIdString) {
     return 0;
 }
 
-int initializeBoat(char* boatIdS, char* shareMemoryIdS) {
+int initializeBoat(char *boatIdS, char *shareMemoryIdS) {
 
-    char* p;
+    int i = 0;
+    char *p;
     boat.id = strtol(boatIdS, &p, 10);
     boat.position = getRandomCoordinates(configArr[SO_LATO], configArr[SO_LATO]);
     boat.capacityInTon = configArr[S0_CAPACITY];
@@ -134,7 +134,6 @@ int initializeBoat(char* boatIdS, char* shareMemoryIdS) {
         return -1;
     }
 
-    int i = 0;
     for (i = 0; i < configArr[SO_MERCI]; i++) {
         Goods emptyGood;
         emptyGood.id = i;
@@ -150,10 +149,13 @@ int initializeBoat(char* boatIdS, char* shareMemoryIdS) {
 int work() {
 
     /* wait for simulation to start */
+    /* TODO Mandare fuori dalla cpu */
     while (startSimulation == 0) { };
 
     while (simulationRunning == 1)
     {   
+        int tradeStatus;
+
         if (gotoPort() == -1) {
             printf("Error while going to a port\n");
             return -1;
@@ -164,7 +166,7 @@ int work() {
             return -1;
         }
 
-        int tradeStatus = openTrade();
+        tradeStatus = openTrade();
         if (tradeStatus == -1) {
             printf("Error during trade\n");
             return -1;
@@ -193,14 +195,17 @@ int newDay() {
 
 int gotoPort() {
 
+    int newPortFound = 0;
+    Port *portArr;
+    double num, distance;
+    long waitTimeNs;
+
     if (simulationRunning == 0) {
         return 0;
     }
 
-    int newPortFound = 0;
-
-    Port* arr = (Port*) shmat(portSharedMemoryPointer, NULL, 0);
-    if (arr == (void*) -1) {
+    portArr = (Port*) shmat(portSharedMemoryPointer, NULL, 0);
+    if (portArr == (void*) -1) {
         printf("Error during opening ports coordinate share memory\n");
         return -1;
     }
@@ -215,17 +220,17 @@ int gotoPort() {
         }
     }
 
-    double num = (double)(((arr[currentPort].position.x - boat.position.x) * (arr[currentPort].position.x - boat.position.x))) 
-        + (double)(((arr[currentPort].position.y - boat.position.y) * (arr[currentPort].position.y - boat.position.y)));
-    double distance = sqrt(num);
+    num = (double)(((portArr[currentPort].position.x - boat.position.x) * (portArr[currentPort].position.x - boat.position.x))) 
+        + (double)(((portArr[currentPort].position.y - boat.position.y) * (portArr[currentPort].position.y - boat.position.y)));
+    distance = sqrt(num);
 
-    long waitTimeNs = getNanoSeconds(distance / configArr[SO_SPEED]);
+    waitTimeNs = getNanoSeconds(distance / configArr[SO_SPEED]);
     if (safeWait(0, waitTimeNs) == -1) {
         printf("Error while waiting to go to in a port\n");
         return -1;
     }
 
-    if (shmdt(arr) == -1) {
+    if (shmdt(portArr) == -1) {
         printf("The arr port coordinates detach failed\n");
         return -1;
     }
@@ -234,6 +239,8 @@ int gotoPort() {
 }
 
 int setupTrade(int portId) {
+
+    Port *portArr;
 
     if (simulationRunning == 0) {
         return 0;
@@ -247,20 +254,20 @@ int setupTrade(int portId) {
         return -1;
     }
     
-    Port* arr = (Port*) shmat(portSharedMemoryPointer, NULL, 0);
-    if (arr == (void*) -1) {
+    portArr = (Port*) shmat(portSharedMemoryPointer, NULL, 0);
+    if (portArr == (void*) -1) {
         printf("Error during opening ports coordinate share memory\n");
         return -1;
     }
 
-    currentMsgQueueId = arr[portId].msgQueuId;
+    currentMsgQueueId = portArr[portId].msgQueuId;
 
     if (sendMessage(currentMsgQueueId, PA_SETUP, writingMsgQueue, readingMsgQueue) == -1) {
         printf("Failed to send SETUP comunication\n");
         return -1;
     }
 
-    if (shmdt(arr) == -1) {
+    if (shmdt(portArr) == -1) {
         printf("The arr port msg queue detach failed\n");
         return -1;
     }
@@ -271,6 +278,9 @@ int setupTrade(int portId) {
 /* Return 0 if the trade is a success, 1 if the port refuse to accept the boat, -1 for errors */
 int openTrade() {
 
+    int waitResponse = 1;
+    PortMessage response;
+
     if (simulationRunning == 0) {
         return 0;
     }
@@ -280,8 +290,6 @@ int openTrade() {
         return -1;
     }
     
-    int waitResponse = 1;
-    PortMessage response;
     while (waitResponse == 1 && simulationRunning == 1) {
         
         int msgResponse = receiveMessage(readingMsgQueue, &response, 0);
@@ -385,6 +393,14 @@ int haveIGoodsToBuy() {
 
 int sellGoods() {
 
+    int waitResponse, i;
+    PortMessage response;
+
+    char semaphoreKey[12];
+    sem_t *semaphore;
+
+    Goods *goodArr;
+
     /* Send request to sell */
     if (sendMessage(writingMsgQueue, PA_SE_GOOD, 0, 0) == -1) {
         printf("Failed to send PA_SE_GOOD comunication\n");
@@ -392,8 +408,7 @@ int sellGoods() {
     }
 
     /* Wait response */
-    int waitResponse = 1;
-    PortMessage response;
+    waitResponse = 1;
     while (waitResponse == 1 && simulationRunning == 1) {
         
         int msgResponse = receiveMessage(readingMsgQueue, &response, 0);
@@ -416,52 +431,51 @@ int sellGoods() {
     }
 
     /* Get semaphore */
-    char semaphoreKey[12];
     if (sprintf(semaphoreKey, "%d", response.msg.data.data2) == -1) {
         printf("Error during conversion of the pid for semaphore to a string\n");
         return -1;
     }   
 
-    sem_t *semaphore = sem_open(semaphoreKey, O_EXCL, 0600, 1);
+    semaphore = sem_open(semaphoreKey, O_EXCL, 0600, 1);
     if (semaphore == SEM_FAILED) {
         printf("Boat failed to found semaphore with key %s\n", semaphoreKey);
         return -1;
     }
 
     /* Get shared memory of the port */
-    Goods* arr = (Goods*) shmat(response.msg.data.data1, NULL, 0);
-    if (arr == (void*) -1) {
+    goodArr = (Goods*) shmat(response.msg.data.data1, NULL, 0);
+    if (goodArr == (void*) -1) {
         printf("Error opening goods shared memory\n");
         return -1;
     }
 
     /* Sell all available goods */
-    int i = 0;
     for (i = 0; i < configArr[SO_MERCI]; i++) {
         if (goodHold[i].loadInTon > 0 && goodHold[i].state != Expired_In_The_Boat) {
             
-            if (arr[i].loadInTon == 0) {
+            int exchange = 0;
+            long waitTimeNs;
+
+            if (goodArr[i].loadInTon == 0) {
                 continue;
             }
             
             sem_wait(semaphore);
 
-            int exchange = 0;
-
             /* If x >= 0 OK, x < 0 not enought good to sell */
-            if (arr[i].loadInTon - goodHold[i].loadInTon >= 0) {
+            if (goodArr[i].loadInTon - goodHold[i].loadInTon >= 0) {
                 exchange = goodHold[i].loadInTon;
-                arr[i].loadInTon -= goodHold[i].loadInTon;
+                goodArr[i].loadInTon -= goodHold[i].loadInTon;
                 goodHold[i].loadInTon = 0;
             } else {
-                exchange = goodHold[i].loadInTon - arr[i].loadInTon;
-                arr[i].loadInTon = 0;
+                exchange = goodHold[i].loadInTon - goodArr[i].loadInTon;
+                goodArr[i].loadInTon = 0;
                 goodHold[i].loadInTon -= exchange;
             }
 
             sem_post(semaphore);
 
-            long waitTimeNs = getNanoSeconds(exchange / configArr[SO_LOADSPEED]);
+            waitTimeNs = getNanoSeconds(exchange / configArr[SO_LOADSPEED]);
             if (safeWait(0, waitTimeNs) == -1) {
                 printf("Error while waiting to exchange\n");
                 return -1;
@@ -474,7 +488,7 @@ int sellGoods() {
         return -1;
     }
 
-    if (shmdt(arr) == -1) {
+    if (shmdt(goodArr) == -1) {
         printf("The arr sell detach failed\n");
         return -1;
     }
@@ -484,6 +498,14 @@ int sellGoods() {
 
 int buyGoods() {
 
+    int waitResponse, i;
+    PortMessage response;
+    
+    char semaphoreKey[12];
+    sem_t *semaphore;
+
+    Goods *goodArr;
+    
     /* Send request to buy */
     if (sendMessage(writingMsgQueue, PA_RQ_GOOD, 0, 0) == -1) {
         printf("Failed to send PA_RQ_GOOD comunication\n");
@@ -491,8 +513,7 @@ int buyGoods() {
     }
 
     /* Wait response */
-    int waitResponse = 1;
-    PortMessage response;
+    waitResponse = 1;
     while (waitResponse == 1 && simulationRunning == 1) {
         
         int msgResponse = receiveMessage(readingMsgQueue, &response, 0);
@@ -515,49 +536,50 @@ int buyGoods() {
     }
 
     /* Get semaphore */
-    char semaphoreKey[12];
     if (sprintf(semaphoreKey, "%d", response.msg.data.data2) == -1) {
         printf("Error during conversion of the pid for semaphore to a string\n");
         return -1;
     }   
 
-    sem_t *semaphore = sem_open(semaphoreKey, O_EXCL, 0600, 1);
+    semaphore = sem_open(semaphoreKey, O_EXCL, 0600, 1);
     if (semaphore == SEM_FAILED) {
         printf("Boat failed to found semaphore with key %s\n", semaphoreKey);
         return -1;
     }
 
     /* Get shared memory of the port */
-    Goods* arr = (Goods*) shmat(response.msg.data.data1, NULL, 0);
-    if (arr == (void*) -1) {
+    goodArr = (Goods*) shmat(response.msg.data.data1, NULL, 0);
+    if (goodArr == (void*) -1) {
         printf("Error opening goods shared memory\n");
         return -1;
     }
 
     /* Buy some available goods */
-    int i = 0;
     for (i = 0; i < configArr[SO_MERCI]; i++) {
-        if (arr[i].loadInTon > 0 && arr[i].state != Expired_In_The_Port) {
+        if (goodArr[i].loadInTon > 0 && goodArr[i].state != Expired_In_The_Port) {
             
+            int availableSpace, exchange;
+            long waitTimeNs;
+
             sem_wait(semaphore);
 
-            int availableSpace = getSpaceAvailableInTheHold();
-            int exchange = 0;
+            availableSpace = getSpaceAvailableInTheHold();
+            exchange = 0;
 
             /* If x >= 0 OK, x < 0 not enought good to buy */
-            if (arr[i].loadInTon - availableSpace >= 0) {
+            if (goodArr[i].loadInTon - availableSpace >= 0) {
                 exchange = availableSpace;
-                arr[i].loadInTon -= availableSpace;
+                goodArr[i].loadInTon -= availableSpace;
                 goodHold[i].loadInTon += availableSpace;
             } else {
-                exchange = availableSpace - arr[i].loadInTon;
-                arr[i].loadInTon = 0;
+                exchange = availableSpace - goodArr[i].loadInTon;
+                goodArr[i].loadInTon = 0;
                 goodHold[i].loadInTon += exchange;
             }
 
             sem_post(semaphore);
 
-            long waitTimeNs = getNanoSeconds(exchange / configArr[SO_LOADSPEED]);
+            waitTimeNs = getNanoSeconds(exchange / configArr[SO_LOADSPEED]);
             if (safeWait(0, waitTimeNs) == -1) {
                 printf("Error while waiting to exchange\n");
                 return -1;
@@ -574,7 +596,7 @@ int buyGoods() {
         return -1;
     }
 
-    if (shmdt(arr) == -1) {
+    if (shmdt(goodArr) == -1) {
         printf("The arr buy detach failed\n");
         return -1;
     }

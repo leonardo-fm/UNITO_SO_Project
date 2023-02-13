@@ -2,15 +2,12 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>   
-#include <signal.h>  
+#include <unistd.h>
 #include <errno.h>
-
 #include <semaphore.h>
 #include <fcntl.h>    
-
 #include <sys/shm.h>    
-#include <signal.h>   
+#include <signal.h> 
 
 #include "lib/config.h"
 #include "lib/utilities.h"
@@ -22,7 +19,7 @@ int goodShareMemoryId;
 int portShareMemoryId;
 
 int NUM_OF_SETTINGS = 13;
-int* configArr;
+int *configArr;
 
 void handle_master_start() { }
 
@@ -82,8 +79,8 @@ int main() {
         exit(8);
     }
 
-    sleep(1);
 
+    /* ----- START SIMULATION ----- */
     if (work() == -1) {
         printf("Error during master work\n");
         exit(9);
@@ -101,19 +98,18 @@ int main() {
 
 int initializeSingalsHandlers() {
 
+    struct sigaction sa1, sa2, sa3;
+
     setpgrp();
 
-    struct sigaction sa1;
     sa1.sa_flags = SA_RESTART;
     sa1.sa_handler = &handle_master_start;
     sigaction(SIGUSR1, &sa1, NULL);
 
-    struct sigaction sa2;
     sa2.sa_flags = SA_RESTART;
     sa2.sa_handler = &handle_master_newDay;
     sigaction(SIGUSR2, &sa2, NULL);
 
-    struct sigaction sa3;
     sa3.sa_flags = SA_RESTART;
     sa3.sa_handler = &handle_master_stopSimulation;
     sigaction(SIGTERM, &sa3, NULL);
@@ -123,7 +119,6 @@ int initializeSingalsHandlers() {
 
 int work() {
 
-    printf("Master pid: %d\n", getpid());
     int simulationDays = configArr[SO_DAYS];
 
     killpg(getpid(), SIGUSR1);
@@ -162,13 +157,14 @@ int generateShareMemory(int sizeOfSegment) {
 
 /* Generate processes by forking master and using execve */
 /* Return 0 if the processes has been loaded succesfully, -1 if some errors occurred. */
-int generateSubProcesses(int nOfProcess, char* execFilePath, int configShareMemoryId, int portShareMemoryId, int goodShareMemoryId) {
+int generateSubProcesses(int nOfProcess, char *execFilePath, int configShareMemoryId, int portShareMemoryId, int goodShareMemoryId) {
     
+    int i = 0;    
+
     if(nOfProcess <= 0) {
         return 0;
     }
 
-    int i = 0;
     while (i++ < nOfProcess)
     {
         int id = fork();
@@ -178,34 +174,41 @@ int generateSubProcesses(int nOfProcess, char* execFilePath, int configShareMemo
         }
         if (id == 0) {  
 
+            char *args[5];
+
+            char configShareMemoryIdString[12];
             char idS[12];
+            char portShareMemoryIdString[12];
+            char goodShareMemoryIdString[12];
+            
+            if (sprintf(configShareMemoryIdString, "%d", configShareMemoryId) == -1) {
+                printf("Error during conversion of the config id of shared memory to a string\n");
+                return -1;
+            }
+            args[0] = configShareMemoryIdString;
+
             /* i - 1 because i need to have the ids to start from 0 to n */
             if (sprintf(idS, "%d", (i - 1)) == -1) {
                 printf("Error during conversion of the id to a string\n");
                 return -1;
             }
+            args[1] = idS;
 
-            char configShareMemoryIdString[12];
-            if (sprintf(configShareMemoryIdString, "%d", configShareMemoryId) == -1) {
-                printf("Error during conversion of the config id of shared memory to a string\n");
-                return -1;
-            }
-
-            char portShareMemoryIdString[12];
             if (sprintf(portShareMemoryIdString, "%d", portShareMemoryId) == -1) {
                 printf("Error during conversion of the port id of shared memory to a string\n");
                 return -1;
             }
+            args[2] = portShareMemoryIdString;
 
-            char goodShareMemoryIdString[12];
             if (sprintf(goodShareMemoryIdString, "%d", goodShareMemoryId) == -1) {
                 printf("Error during conversion of the good id of shared memory to a string\n");
                 return -1;
             }
+            args[3] = goodShareMemoryIdString;
+            
+            args[4] = NULL;
 
-            char* arr[] = {configShareMemoryIdString, idS, portShareMemoryIdString, goodShareMemoryIdString, NULL};
-
-            if (execve(execFilePath, arr, NULL) == -1) {
+            if (execve(execFilePath, args, NULL) == -1) {
                 printf("Error during innesting of the file %s\n", execFilePath);
                 return -1;
             }
@@ -233,14 +236,15 @@ int initializeGoods(int goodShareMemoryId) {
 /* Generate all the goods requested and initialize them */
 int generateGoods(int goodShareMemoryId) {
 
-    Goods* arr = (Goods*) shmat(goodShareMemoryId, NULL, 0);
+    int goodQuantity, i;
+
+    Goods *arr = (Goods*) shmat(goodShareMemoryId, NULL, 0);
     if (arr == (void*) -1) {
         printf("Error during good memory allocation\n");
         return -1;
     }
 
-    int goodQuantity = (configArr[SO_FILL] / 2) / configArr[SO_MERCI];
-    int i = 0;
+    goodQuantity = (int)((configArr[SO_FILL] / 2) / configArr[SO_MERCI]);
     for (i = 0; i < configArr[SO_MERCI]; i++) {
         Goods good;
         good.id = i;
@@ -263,13 +267,15 @@ int generateGoods(int goodShareMemoryId) {
 /* https://stackoverflow.com/questions/32205396/share-posix-semaphore-among-multiple-processes */
 int generateSemaphore() {
 
+    sem_t *semaphore;
+
     char semaphoreKey[12];
     if (sprintf(semaphoreKey, "%d", getpid()) == -1) {
         printf("Error during conversion of the pid for semaphore to a string\n");
         return -1;
     }   
 
-    sem_t* semaphore = sem_open(semaphoreKey, O_CREAT, 0600, 1);
+    semaphore = sem_open(semaphoreKey, O_CREAT, 0600, 1);
     if (semaphore == SEM_FAILED) {
         printf("Error on opening the semaphore\n");
         return -1;

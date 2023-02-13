@@ -7,6 +7,12 @@
         "config.h": "c",
         "shm.h": "c",
         "compare": "c",
-        "type_traits": "c"
+        "type_traits": "c",
+        "unistd.h": "c",
+        "stdlib.h": "c",
+        "errno.h": "c",
+        "models.h": "c",
+        "stdio.h": "c",
+        "utilities.h": "c"
     }
 }
