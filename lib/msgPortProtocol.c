@@ -10,13 +10,7 @@
 #include "msgPortProtocol.h"
 
 size_t MAX_BUFFER_PORT_MSG = sizeof(int) * 3;
-int runningStatus = 1;
-
-/* Set the status of the simulation */
-void setRunningStatus(int status) {
-    printf("=== Setted status to %d ===\n", status);
-    runningStatus = status;
-}
+int queueRunningStatus = 1;
 
 /* Send a message to the queue, eturn 0 if ok otherwise -1 */
 int sendMessage(int msgQueueId, ProtocolActions action, int data1, int data2) {
@@ -27,7 +21,7 @@ int sendMessage(int msgQueueId, ProtocolActions action, int data1, int data2) {
     pMsg.msg.data.data1 = data1;
     pMsg.msg.data.data2 = data2;
 
-    if (msgsnd(msgQueueId, &pMsg, MAX_BUFFER_PORT_MSG, 0) == -1 && runningStatus == 1) {
+    if (msgsnd(msgQueueId, &pMsg, MAX_BUFFER_PORT_MSG, 0) == -1 && queueRunningStatus == 1) {
         printf("Error during sending of the message errno:%d\n", errno);
         return -1;
     }
@@ -49,7 +43,7 @@ int receiveMessage(int msgQueueId, PortMessage *pMsg, int flag) {
         errno = 0;
         msgStatus = msgrcv(msgQueueId, pMsg, MAX_BUFFER_PORT_MSG, msgToRec, flag);
         
-        if (runningStatus == 0) {
+        if (queueRunningStatus == 0) {
             break;
         }
 
@@ -58,7 +52,7 @@ int receiveMessage(int msgQueueId, PortMessage *pMsg, int flag) {
     if (errno == ENOMSG) {
         /* No message in the queue */
         return -2;
-    } else if (errno != EINTR && errno != 0 && runningStatus == 1) {
+    } else if (errno != EINTR && errno != 0 && queueRunningStatus == 1) {
         printf("Error during retrieving the message, errno: %d\n", errno);
         return -1;
     }

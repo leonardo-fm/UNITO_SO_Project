@@ -1,6 +1,7 @@
 #define _GNU_SOURCES
 
 #include <stdio.h>
+#include <string.h>
 #include <stdlib.h>
 #include <unistd.h>   
 #include <sys/shm.h>  
@@ -34,22 +35,36 @@ Goods **goodExchange;
 int startSimulation = 0;
 int simulationRunning = 1;
 
-void handle_port_start() {
+void handle_port_simulation_signals(int signal) {
 
-    startSimulation = 1;
+    switch (signal)
+    {
+        /* Start of the simulation */
+        case SIGUSR1:
+            startSimulation = 1;
+            break;
+            
+        /* New day of simulation */
+        case SIGUSR2:
+            newDay();
+            break;
+
+        /* End of the simulation */
+        case SIGSYS:
+            queueRunningStatus = 0;
+            simulationRunning = 0;
+            break;
+        default:
+            break;
+    }
 }
 
-void handle_port_newDay() {
+void handle_port_stopProcess() {
 
-    newDay();
+    printf("Stopping port...\n");
+    cleanup();
+    exit(0);
 }
-
-void handle_port_stopSimulation() {
-
-    runningStatus = 0;
-    simulationRunning = 0;
-}
-
 
 int main(int argx, char *argv[]) {
 
@@ -82,22 +97,19 @@ int main(int argx, char *argv[]) {
 
 int initializeSingalsHandlers() {
 
-    struct sigaction sa1, sa2, sa3;
+    struct sigaction signalAction;
 
     setpgid(getpid(), getppid());
 
-    sa1.sa_flags = SA_RESTART;
-    sa1.sa_handler = &handle_port_start;
-    sigaction(SIGUSR1, &sa1, NULL);
+    signal(SIGUSR1, handle_port_simulation_signals);
 
-    sa2.sa_flags = SA_RESTART;
-    sa2.sa_handler = &handle_port_newDay;
-    sigaction(SIGUSR2, &sa2, NULL);
+    /* Use different mwthod because i need to use the handler multiple times */
+    signalAction.sa_flags = SA_RESTART;
+    signalAction.sa_handler = &handle_port_simulation_signals;
+    sigaction(SIGUSR2, &signalAction, NULL);
 
-    /* TODO USARE UN'ALTRA FLAG */
-    sa3.sa_flags = SA_RESTART; 
-    sa3.sa_handler = &handle_port_stopSimulation;
-    sigaction(SIGTERM, &sa3, NULL);
+    signal(SIGSYS, handle_port_simulation_signals);
+    signal(SIGINT, handle_port_stopProcess);
 
     return 0;
 }
@@ -274,7 +286,8 @@ int initializePortGoods(char *goodShareMemoryIdS) {
 
     /* Generate an array of random number with no repetitions */
     goodsToTake = (int*) malloc(sizeof(int) * configArr[SO_MERCI]);
-    for (i = 0; i < configArr[SO_MERCI]; i++) {
+
+    for (i = 0; i < configArr[SO_MERCI] - 1; i++) {
 
         int flag, randomValue;
         
@@ -371,10 +384,9 @@ int work() {
     int maxQauys, i, j;
     int *queues[2];
     
-
     /* wait for simulation to start */
     while (startSimulation == 0) { };
-    
+
     /* queue[0][n] read queue | queue[1][n] write queue */
     maxQauys = port.availableQuays;
     queues[0] = (int*) malloc(sizeof(int) * maxQauys);
@@ -387,6 +399,7 @@ int work() {
 
     while (simulationRunning == 1)
     {
+        
         PortMessage setupMsg;
         int setupMsgStatus = receiveMessage(port.msgQueuId, &setupMsg, IPC_NOWAIT);
 
@@ -469,7 +482,7 @@ int work() {
 }
 
 int newDay() {
-
+    
     int i;
     Goods *arrStock;
 
@@ -587,7 +600,7 @@ int generateSemaphore(int semKey) {
 }
 
 int cleanup() {
-    
+
     if (shmdt(configArr) == -1) {
         printf("The conf arr detach failed\n");
         return -1;

@@ -21,11 +21,13 @@ int portShareMemoryId;
 int NUM_OF_SETTINGS = 13;
 int *configArr;
 
-void handle_master_start() { }
+void handle_master_stopProcess() { 
 
-void handle_master_newDay() { }
-
-void handle_master_stopSimulation() { }
+    printf("Stopping program...\n");
+    killpg(getpid(), SIGINT);
+    cleanup();
+    exit(0);
+}
 
 int main() {
 
@@ -80,6 +82,7 @@ int main() {
     }
 
 
+    sleep(1); /*TODO DA TOGLIERE*/
     /* ----- START SIMULATION ----- */
     if (work() == -1) {
         printf("Error during master work\n");
@@ -98,21 +101,9 @@ int main() {
 
 int initializeSingalsHandlers() {
 
-    struct sigaction sa1, sa2, sa3;
-
     setpgrp();
 
-    sa1.sa_flags = SA_RESTART;
-    sa1.sa_handler = &handle_master_start;
-    sigaction(SIGUSR1, &sa1, NULL);
-
-    sa2.sa_flags = SA_RESTART;
-    sa2.sa_handler = &handle_master_newDay;
-    sigaction(SIGUSR2, &sa2, NULL);
-
-    sa3.sa_flags = SA_RESTART;
-    sa3.sa_handler = &handle_master_stopSimulation;
-    sigaction(SIGTERM, &sa3, NULL);
+    signal(SIGINT, handle_master_stopProcess);
 
     return 0;
 }
@@ -121,11 +112,14 @@ int work() {
 
     int simulationDays = configArr[SO_DAYS];
 
+    /* Set the current group different from itselfe to avoid interupt from custom signals */
+    setpgid(getpid(), getppid());
+
     killpg(getpid(), SIGUSR1);
 
     while (simulationDays > 0)
     {
-        printf("Starting day %d\n", simulationDays);
+        printf("Remaning days %d\n", simulationDays);
         simulationDays--;
 
         if (safeWait(1, 0l) == -1) {
@@ -138,9 +132,8 @@ int work() {
         }
     }
 
-    killpg(getpid(), SIGTERM);
+    killpg(getpid(), SIGSYS);
     printf("Simulation finished\n");
-    sleep(2);
 
     return 0;
 }

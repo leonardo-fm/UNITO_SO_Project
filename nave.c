@@ -36,20 +36,35 @@ Goods *goodHold;
 int startSimulation = 0;
 int simulationRunning = 1;
 
-void handle_boat_start() {
+void handle_boat_simulation_signals(int signal) {
 
-    startSimulation = 1;
+    switch (signal)
+    {
+        /* Start of the simulation */
+        case SIGUSR1:
+            startSimulation = 1;
+            break;
+            
+        /* New day of simulation */
+        case SIGUSR2:
+            newDay();
+            break;
+
+        /* End of the simulation */
+        case SIGSYS:
+            queueRunningStatus = 0;
+            simulationRunning = 0;
+            break;
+        default:
+            break;
+    }
 }
 
-void handle_boat_newDay() {
-
-    newDay();
-}
-
-void handle_boat_stopSimulation() {
+void handle_boat_stopProcess() {
     
-    runningStatus = 0;
-    simulationRunning = 0;
+    printf("Stopping boat...\n");
+    cleanup();
+    exit(0);
 }
 
 
@@ -84,21 +99,19 @@ int main(int argx, char *argv[]) {
 
 int initializeSingalsHandlers() {
 
-    struct sigaction sa1, sa2, sa3;
+    struct sigaction signalAction;
 
     setpgid(getpid(), getppid());
 
-    sa1.sa_flags = SA_RESTART;
-    sa1.sa_handler = &handle_boat_start;
-    sigaction(SIGUSR1, &sa1, NULL);
+    signal(SIGUSR1, handle_boat_simulation_signals);
 
-    sa2.sa_flags = SA_RESTART;
-    sa2.sa_handler = &handle_boat_newDay;
-    sigaction(SIGUSR2, &sa2, NULL);
+    /* Use different mwthod because i need to use the handler multiple times */
+    signalAction.sa_flags = SA_RESTART;
+    signalAction.sa_handler = &handle_boat_simulation_signals;
+    sigaction(SIGUSR2, &signalAction, NULL);
 
-    sa3.sa_flags = SA_RESTART;
-    sa3.sa_handler = &handle_boat_stopSimulation;
-    sigaction(SIGTERM, &sa3, NULL);
+    signal(SIGSYS, handle_boat_simulation_signals);
+    signal(SIGINT, handle_boat_stopProcess);
 
     return 0;
 }

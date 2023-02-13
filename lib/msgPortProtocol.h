@@ -22,9 +22,7 @@ typedef struct {
     } msg;
 } PortMessage;
 
-extern int runningStatus;
-
-void setRunningStatus(int status);
+extern int queueRunningStatus;
 
 int sendMessage(int msgQueueId, ProtocolActions action, int data1, int data2);
 int receiveMessage(int msgQueueId, PortMessage *pMsg, int flag); 
