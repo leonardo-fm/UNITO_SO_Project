@@ -399,8 +399,8 @@ int work() {
     {
         if (simulationRunning == 1) {
             PortMessage setupMsg;
-            /*int flag = port.availableQuays == port.quays ? 0 : IPC_NOWAIT;*/
-            int setupMsgStatus = receiveMessage(port.msgQueuId, &setupMsg, IPC_NOWAIT);
+            int flag = port.availableQuays == port.quays ? 0 : IPC_NOWAIT;
+            int setupMsgStatus = receiveMessage(port.msgQueuId, &setupMsg, flag, 1);
 
             if (setupMsgStatus == -1) {
                 printf("Error during reciving message from boat\n");
@@ -430,7 +430,7 @@ int work() {
             readingMsgQueue = queues[0][j];
             writingMsgQueue = queues[1][j];
 
-            msgStatus = receiveMessage(readingMsgQueue, &receivedMsg, 0);
+            msgStatus = receiveMessage(readingMsgQueue, &receivedMsg, 0, 0);
 
             if (msgStatus == -1) {
                 printf("Error during reciving message (r: %d, w: %d) from boat\n", readingMsgQueue, writingMsgQueue);
@@ -518,7 +518,7 @@ int freePendingMsgs() {
     pendingMsg = (int) msgInfo.msg_qnum;  
     for (i = 0; i < pendingMsg; i++) {
         PortMessage pendingMsg;
-        int pendingMsgStatus = receiveMessage(port.msgQueuId, &pendingMsg, 0);
+        int pendingMsgStatus = receiveMessage(port.msgQueuId, &pendingMsg, 0, 0);
 
         if (pendingMsgStatus == -1) {
             printf("Error during reciving message from boat on pending messages\n");

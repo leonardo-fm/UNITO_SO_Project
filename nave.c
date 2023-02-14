@@ -52,7 +52,6 @@ void handle_boat_simulation_signals(int signal) {
         /* End of the simulation */
         case SIGSYS:
             simulationRunning = 0;
-            stopWaitingQueues = 1;
             break;
         default:
             printf("Intercept a unhandled signal: %d\n", signal);
@@ -310,7 +309,7 @@ int openTrade() {
     waitResponse = 1;
     while (waitResponse == 1) {
         
-        int msgResponse = receiveMessage(readingMsgQueue, &response, 0);
+        int msgResponse = receiveMessage(readingMsgQueue, &response, 0, 0);
         if (msgResponse == -1) {
             printf("Error during waiting response from ACCEPT\n");
             return -1;
@@ -387,7 +386,7 @@ int closeTrade() {
     waitResponse = 1;
     while (waitResponse == 1) {
         
-        int msgResponse = receiveMessage(readingMsgQueue, &response, 0);
+        int msgResponse = receiveMessage(readingMsgQueue, &response, 0, 0);
         if (msgResponse == -1) {
             printf("Error during weating response from EOT\n");
             return -1;
@@ -474,7 +473,7 @@ int sellGoods() {
     waitResponse = 1;
     while (waitResponse == 1) {
         
-        int msgResponse = receiveMessage(readingMsgQueue, &response, 0);
+        int msgResponse = receiveMessage(readingMsgQueue, &response, 0, 0);
         if (msgResponse == -1) {
             printf("Error during weating response from PA_SE_GOOD\n");
             return -1;
@@ -580,7 +579,7 @@ int buyGoods() {
     waitResponse = 1;
     while (waitResponse == 1) {
         
-        int msgResponse = receiveMessage(readingMsgQueue, &response, 0);
+        int msgResponse = receiveMessage(readingMsgQueue, &response, 0, 0);
         if (msgResponse == -1) {
             printf("Error during weating response from PA_RQ_GOOD\n");
             return -1;

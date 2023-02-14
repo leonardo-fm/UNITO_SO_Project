@@ -41,7 +41,7 @@ int sendMessage(int msgQueueId, ProtocolActions action, int data1, int data2) {
 
 /* Set the message with the first message in the queue */
 /* Return 0 if ok, -1 if some error occurred and -2 if no message was found */
-int receiveMessage(int msgQueueId, PortMessage *pMsg, int flag) {
+int receiveMessage(int msgQueueId, PortMessage *pMsg, int flag, int forceStop) {
 
     int msgStatus;
     long int msgToRec = 0;
@@ -49,7 +49,12 @@ int receiveMessage(int msgQueueId, PortMessage *pMsg, int flag) {
     memset(pMsg, 0, sizeof(PortMessage));
 
     do {
-    
+        
+        if (forceStop == 1 && stopWaitingQueues == 1) {
+            errno = ENOMSG;
+            break;
+        }
+
         /* Reset errno error */
         errno = 0;
         msgStatus = msgrcv(msgQueueId, pMsg, MAX_BUFFER_PORT_MSG, msgToRec, flag);
