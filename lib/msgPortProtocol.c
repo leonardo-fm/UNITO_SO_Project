@@ -60,7 +60,14 @@ int receiveMessage(int msgQueueId, PortMessage *pMsg, int flag) {
         /* No message in the queue */
         return -2;
     } else if (errno != EINTR && errno != 0) {
-        printf("Error during retrieving the message, errno: %d\n", errno);
+        printf("Error during retrieving the message from msg queue: %d (swq: %d), errno: %d\n", msgQueueId, stopWaitingQueues, errno);
+        /* Check if the msg queue exist */
+        if (kill(msgQueueId, 0) == 0) {
+            printf("The msg queue %d exist\n", msgQueueId);
+        } else {
+            printf("The msg queue %d not exist\n", msgQueueId);
+        }
+        
         return -1;
     }
 

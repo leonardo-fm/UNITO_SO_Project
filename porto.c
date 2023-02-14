@@ -399,6 +399,7 @@ int work() {
     {
         if (simulationRunning == 1) {
             PortMessage setupMsg;
+            /*int flag = port.availableQuays == port.quays ? 0 : IPC_NOWAIT;*/
             int setupMsgStatus = receiveMessage(port.msgQueuId, &setupMsg, IPC_NOWAIT);
 
             if (setupMsgStatus == -1) {
@@ -432,20 +433,26 @@ int work() {
             msgStatus = receiveMessage(readingMsgQueue, &receivedMsg, 0);
 
             if (msgStatus == -1) {
-                printf("Error during reciving message from boat\n");
+                printf("Error during reciving message (r: %d, w: %d) from boat\n", readingMsgQueue, writingMsgQueue);
                 return -1;
             }
 
             if (msgStatus == 0) {
                 
                 /* New message */
+                int acceptResponse;
                 switch (receivedMsg.msg.data.action)
                 {
                     case PA_ACCEPT:
-                        if (handlePA_ACCEPT(writingMsgQueue) == -1) {
+                        acceptResponse = handlePA_ACCEPT(writingMsgQueue);
+                        if (acceptResponse == -1) {
                             printf("Error during ACCEPT handling\n");
                             return -1;
                         };
+                        if (acceptResponse == 1) {
+                            queues[0][j] = -1;
+                            queues[1][j] = -1;
+                        }
                         break;
                     case PA_SE_GOOD:
                         if (handlePA_SE_GOOD(writingMsgQueue) == -1) {
@@ -557,6 +564,7 @@ int newDay() {
     return 0;
 }
 
+/* If the port accept the boat request return 0, if not return 1, for errors return -1 */
 int handlePA_ACCEPT(int queueId) {
 
     if (port.availableQuays > 0 && simulationRunning == 1) {
@@ -570,6 +578,8 @@ int handlePA_ACCEPT(int queueId) {
             printf("Error during send ACCEPT\n");
             return -1;
         }
+
+        return 1;
     }
 
     return 0;

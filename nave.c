@@ -187,7 +187,7 @@ int work() {
             if (tradeStatus == -1) {
                 printf("Error during trade\n");
                 return -1;
-            }
+            } 
         }
     }
 
@@ -306,12 +306,9 @@ int openTrade() {
         return -1;
     }
 
-    /* Default response to avoid random numbers if not initialized  */
-    response.msg.data.action = PA_N;
-
     /* Wait for the response */
     waitResponse = 1;
-    while (waitResponse == 1 && simulationRunning == 1) {
+    while (waitResponse == 1) {
         
         int msgResponse = receiveMessage(readingMsgQueue, &response, 0);
         if (msgResponse == -1) {
@@ -325,6 +322,17 @@ int openTrade() {
     }
     
     if (response.msg.data.action == PA_N) {
+
+        if (msgctl(readingMsgQueue, IPC_RMID, NULL) == -1) {
+            printf("BOAT R The queue failed to be closed\n");
+            return -1;
+        }
+
+        if (msgctl(writingMsgQueue, IPC_RMID, NULL) == -1) {
+            printf("BOAT W The queue failed to be closed\n");
+            return -1;
+        }
+
         return 1;
     }
     
@@ -656,8 +664,6 @@ int buyGoods() {
     return 0;
 }
 
-
-
 /* Return how many space have in the boat hold */
 int getSpaceAvailableInTheHold() {
 
@@ -675,20 +681,6 @@ int cleanup() {
     if (shmdt(configArr) == -1) {
         printf("The config detach failed\n");
         return -1;
-    }
-
-    if (readingMsgQueue != -1) {
-        if (msgctl(readingMsgQueue, IPC_RMID, NULL) == -1) {
-            printf("BOAT R The queue failed to be closed\n");
-            return -1;
-        }
-    }
-
-    if (writingMsgQueue != -1) {
-        if (msgctl(writingMsgQueue, IPC_RMID, NULL) == -1) {
-            printf("BOAT W The queue failed to be closed\n");
-            return -1;
-        }
     }
 
     return 0;
