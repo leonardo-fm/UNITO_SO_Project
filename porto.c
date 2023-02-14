@@ -19,10 +19,6 @@
 
 #include "porto.h"
 
-int handlePA_ACCEPT(int queueId);
-int handlePA_SE_GOOD(int queueId);
-int handlePA_RQ_GOOD(int queueId);
-
 int NUM_OF_SETTINGS = 13;
 int *configArr;
  
@@ -49,8 +45,8 @@ void handle_port_simulation_signals(int signal) {
 
         /* End of the simulation */
         case SIGSYS:
-            queueRunningStatus = 0;
             simulationRunning = 0;
+            stopWaitingQueues = 1;
             break;
         default:
             printf("Intercept a unhandled signal: %d\n", signal);
@@ -398,23 +394,25 @@ int work() {
         }
     }
 
-    while (simulationRunning == 1)
+    /* Remains alive until all the quays are empty to avoid boats closing errors */
+    while (simulationRunning == 1 || (port.quays - port.availableQuays) > 0)
     {
-        
-        PortMessage setupMsg;
-        int setupMsgStatus = receiveMessage(port.msgQueuId, &setupMsg, IPC_NOWAIT);
+        if (simulationRunning == 1) {
+            PortMessage setupMsg;
+            int setupMsgStatus = receiveMessage(port.msgQueuId, &setupMsg, IPC_NOWAIT);
 
-        if (setupMsgStatus == -1) {
-            printf("Error during reciving message from boat\n");
-            return -1;
-        }
-        if (setupMsgStatus == 0 && setupMsg.msg.data.action == PA_SETUP) {
+            if (setupMsgStatus == -1) {
+                printf("Error during reciving message from boat\n");
+                return -1;
+            }
+            if (setupMsgStatus == 0 && setupMsg.msg.data.action == PA_SETUP) {
 
-            for (j = 0; j < maxQauys; j++) { 
-                if (queues[0][j] == -1) {
-                    queues[0][j] = setupMsg.msg.data.data1;
-                    queues[1][j] = setupMsg.msg.data.data2;
-                    break;
+                for (j = 0; j < maxQauys; j++) { 
+                    if (queues[0][j] == -1) {
+                        queues[0][j] = setupMsg.msg.data.data1;
+                        queues[1][j] = setupMsg.msg.data.data2;
+                        break;
+                    }
                 }
             }
         }
@@ -476,6 +474,11 @@ int work() {
         }
     }
 
+    if (freePendingMsgs() == -1) {
+        printf("Error while freeing pending messages\n");
+        return -1;
+    }
+
     free(queues[0]);
     free(queues[1]);
 
@@ -491,6 +494,37 @@ int waitForStart() {
     waitRes = sigwait(&sigset, &sig);
 
     return waitRes;
+}
+
+int freePendingMsgs() {
+
+    /* Check for pending requests */
+    struct msqid_ds msgInfo;
+    int msgInfoResponse, pendingMsg, i;
+    
+    msgInfoResponse = msgctl(port.msgQueuId, IPC_STAT, &msgInfo);
+    if (msgInfoResponse == -1) {
+        printf("Error while retrieving info about message queue\n");
+        return -1;
+    }
+
+    pendingMsg = (int) msgInfo.msg_qnum;  
+    for (i = 0; i < pendingMsg; i++) {
+        PortMessage pendingMsg;
+        int pendingMsgStatus = receiveMessage(port.msgQueuId, &pendingMsg, 0);
+
+        if (pendingMsgStatus == -1) {
+            printf("Error during reciving message from boat on pending messages\n");
+            return -1;
+        }
+        
+        if (sendMessage(pendingMsg.msg.data.data2, PA_N, -1, -1) == -1) {
+            printf("Error during send NO\n");
+            return -1;
+        }
+    }
+
+    return 0;
 }
 
 int newDay() {
@@ -525,7 +559,7 @@ int newDay() {
 
 int handlePA_ACCEPT(int queueId) {
 
-    if (port.availableQuays > 0) {
+    if (port.availableQuays > 0 && simulationRunning == 1) {
         if (sendMessage(queueId, PA_Y, -1, -1) == -1) {
             printf("Error during send ACCEPT\n");
             return -1;
@@ -543,10 +577,17 @@ int handlePA_ACCEPT(int queueId) {
 
 int handlePA_SE_GOOD(int queueId) {
 
-    /* The boat want to sell some goods */
-    if (sendMessage(queueId, PA_Y, goodRequestShareMemoryId, goodRequestShareMemoryId) == -1) {
-            printf("Error during send SE_GOOD errno: %d\n", errno);
+    if (simulationRunning == 1) {
+        /* The boat want to sell some goods */
+        if (sendMessage(queueId, PA_Y, goodRequestShareMemoryId, goodRequestShareMemoryId) == -1) {
+                printf("Error during send SE_GOOD errno: %d\n", errno);
+                return -1;
+        }
+    } else {
+        if (sendMessage(queueId, PA_N, -1, -1) == -1) {
+            printf("Error during send SE NO\n");
             return -1;
+        }
     }
     
     return 0;
@@ -554,10 +595,17 @@ int handlePA_SE_GOOD(int queueId) {
 
 int handlePA_RQ_GOOD(int queueId) {
 
-    /* The boat want to buy some goods */
-    if (sendMessage(queueId, PA_Y, goodStockShareMemoryId, goodStockShareMemoryId) == -1) {
-            printf("Error during send RQ_GOOD errno: %d\n", errno);
+    if (simulationRunning == 1) {
+        /* The boat want to buy some goods */
+        if (sendMessage(queueId, PA_Y, goodStockShareMemoryId, goodStockShareMemoryId) == -1) {
+                printf("Error during send RQ_GOOD errno: %d\n", errno);
+                return -1;
+        }
+    } else {
+        if (sendMessage(queueId, PA_N, -1, -1) == -1) {
+            printf("Error during send RQ NO\n");
             return -1;
+        }
     }
 
     return 0;
@@ -565,9 +613,9 @@ int handlePA_RQ_GOOD(int queueId) {
 
 int handlePA_EOT(int writeQueueId) {
 
-    /* The port want to end the trasmission */
+    /* The port acknowledge to end the transmission */
     if (sendMessage(writeQueueId, PA_EOT, 0, 0) == -1) {
-            printf("Error during send RQ_GOOD errno: %d\n", errno);
+            printf("Error during send EOT errno: %d\n", errno);
             return -1;
     }
 

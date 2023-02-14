@@ -80,7 +80,7 @@ int main() {
         exit(8);
     }
 
-
+sleep(1);
     /* ----- START SIMULATION ----- */
     if (work() == -1) {
         printf("Error during master work\n");
@@ -289,7 +289,7 @@ int cleanup() {
         printf("The shared memory failed to be closed\n");
         return -1;
     }
-
+    
     if (shmctl(portShareMemoryId, IPC_RMID, NULL) == -1) {
         printf("The shared memory failed to be closed\n");
         return -1;

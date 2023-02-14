@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>    
+#include <string.h>
 
 #include <sys/shm.h>  
 #include <sys/msg.h> 
@@ -50,8 +51,8 @@ void handle_boat_simulation_signals(int signal) {
 
         /* End of the simulation */
         case SIGSYS:
-            queueRunningStatus = 0;
             simulationRunning = 0;
+            stopWaitingQueues = 1;
             break;
         default:
             printf("Intercept a unhandled signal: %d\n", signal);
@@ -169,20 +170,24 @@ int work() {
     {   
         int tradeStatus;
 
-        if (gotoPort() == -1) {
-            printf("Error while going to a port\n");
-            return -1;
+        if (simulationRunning == 1) {
+            if (gotoPort() == -1) {
+                printf("Error while going to a port\n");
+                return -1;
+            }
         }
 
-        if (setupTrade(currentPort) == -1) {
-            printf("Error during setup for the trade\n");
-            return -1;
-        }
+        if (simulationRunning == 1) {
+            if (setupTrade(currentPort) == -1) {
+                printf("Error during setup for the trade\n");
+                return -1;
+            }
 
-        tradeStatus = openTrade();
-        if (tradeStatus == -1) {
-            printf("Error during trade\n");
-            return -1;
+            tradeStatus = openTrade();
+            if (tradeStatus == -1) {
+                printf("Error during trade\n");
+                return -1;
+            }
         }
     }
 
@@ -277,7 +282,6 @@ int setupTrade(int portId) {
     }
 
     currentMsgQueueId = portArr[portId].msgQueuId;
-
     if (sendMessage(currentMsgQueueId, PA_SETUP, writingMsgQueue, readingMsgQueue) == -1) {
         printf("Failed to send SETUP comunication\n");
         return -1;
@@ -294,19 +298,24 @@ int setupTrade(int portId) {
 /* Return 0 if the trade is a success, 1 if the port refuse to accept the boat, -1 for errors */
 int openTrade() {
 
-    int waitResponse = 1;
+    int waitResponse;
     PortMessage response;
 
     if (sendMessage(writingMsgQueue, PA_ACCEPT, 0, 0) == -1) {
-        printf("Failed to send ACCEPT comunication\n");
+        printf("Failed to send ACCEPT comunication on channel %d\n", writingMsgQueue);
         return -1;
     }
-    
+
+    /* Default response to avoid random numbers if not initialized  */
+    response.msg.data.action = PA_N;
+
+    /* Wait for the response */
+    waitResponse = 1;
     while (waitResponse == 1 && simulationRunning == 1) {
         
         int msgResponse = receiveMessage(readingMsgQueue, &response, 0);
         if (msgResponse == -1) {
-            printf("Error during weating response from ACCEPT\n");
+            printf("Error during waiting response from ACCEPT\n");
             return -1;
         }
 
@@ -329,7 +338,7 @@ int openTrade() {
 
 int trade() {
 
-    if (haveIGoodsToSell() == 0) {
+    if (haveIGoodsToSell() == 0 && simulationRunning == 1) {
         
         if (sellGoods() == -1) {
             printf("Error during selling goods\n");
@@ -337,7 +346,7 @@ int trade() {
         }
     }
 
-    if (haveIGoodsToBuy() == 0) {
+    if (haveIGoodsToBuy() == 0 && simulationRunning == 1) {
 
         if (buyGoods() == -1) {
             printf("Error during buying goods\n");
@@ -355,7 +364,7 @@ int trade() {
 
 int closeTrade() {
 
-    int waitResponse = 1;
+    int waitResponse;
     PortMessage response;
 
     if (sendMessage(writingMsgQueue, PA_EOT, 0, 0) == -1) {
@@ -363,7 +372,12 @@ int closeTrade() {
         return -1;
     }
 
-    while (waitResponse == 1 && simulationRunning == 1) {
+    /* Default response to avoid random numbers if not initialized  */
+    response.msg.data.action = PA_EOT;
+    
+    /* Wait for the response of end of transmission */
+    waitResponse = 1;
+    while (waitResponse == 1) {
         
         int msgResponse = receiveMessage(readingMsgQueue, &response, 0);
         if (msgResponse == -1) {
@@ -376,7 +390,7 @@ int closeTrade() {
         }
     }
 
-    if (response.msg.data.action == PA_EOT && simulationRunning == 1) {
+    if (response.msg.data.action == PA_EOT) {
 
         currentMsgQueueId = -1;
 
@@ -391,6 +405,8 @@ int closeTrade() {
             return -1;
         }
         writingMsgQueue = -1;
+    } else {
+        printf("The boat while waiting for the EOT from the port recived something else\n");
     }
 
     return 0;
@@ -436,14 +452,19 @@ int sellGoods() {
     Goods *goodArr;
 
     /* Send request to sell */
-    if (sendMessage(writingMsgQueue, PA_SE_GOOD, 0, 0) == -1) {
-        printf("Failed to send PA_SE_GOOD comunication\n");
-        return -1;
+    if (simulationRunning == 1) {
+        if (sendMessage(writingMsgQueue, PA_SE_GOOD, 0, 0) == -1) {
+            printf("Failed to send PA_SE_GOOD comunication\n");
+            return -1;
+        }
     }
+
+    /* Default response to avoid random numbers if not initialized */
+    response.msg.data.action = PA_N;
 
     /* Wait response */
     waitResponse = 1;
-    while (waitResponse == 1 && simulationRunning == 1) {
+    while (waitResponse == 1) {
         
         int msgResponse = receiveMessage(readingMsgQueue, &response, 0);
         if (msgResponse == -1) {
@@ -468,7 +489,7 @@ int sellGoods() {
 
     semaphore = sem_open(semaphoreKey, O_EXCL, 0600, 1);
     if (semaphore == SEM_FAILED) {
-        printf("Boat failed to found semaphore with key %s\n", semaphoreKey);
+        printf("Boat failed to found semaphore (SG) with key %s\n", semaphoreKey);
         return -1;
     }
 
@@ -537,14 +558,19 @@ int buyGoods() {
     Goods *goodArr;
     
     /* Send request to buy */
-    if (sendMessage(writingMsgQueue, PA_RQ_GOOD, 0, 0) == -1) {
-        printf("Failed to send PA_RQ_GOOD comunication\n");
-        return -1;
+    if (simulationRunning == 1) {
+        if (sendMessage(writingMsgQueue, PA_RQ_GOOD, 0, 0) == -1) {
+            printf("Failed to send PA_RQ_GOOD comunication\n");
+            return -1;
+        }
     }
+
+    /* Default response to avoid random numbers if not initialized */
+    response.msg.data.action = PA_N;
 
     /* Wait response */
     waitResponse = 1;
-    while (waitResponse == 1 && simulationRunning == 1) {
+    while (waitResponse == 1) {
         
         int msgResponse = receiveMessage(readingMsgQueue, &response, 0);
         if (msgResponse == -1) {
@@ -569,7 +595,7 @@ int buyGoods() {
 
     semaphore = sem_open(semaphoreKey, O_EXCL, 0600, 1);
     if (semaphore == SEM_FAILED) {
-        printf("Boat failed to found semaphore with key %s\n", semaphoreKey);
+        printf("Boat failed to found semaphore (RG) with key %s\n", semaphoreKey);
         return -1;
     }
 
