@@ -201,7 +201,7 @@ int initializeExchangeGoods() {
     }
     arrStock = (Goods*) shmat(goodStockShareMemoryId, NULL, 0);
     if (arrStock == (void*) -1) {
-        printf("Error during semaphore creation\n");
+        printf("Error during stock type assigne\n");
         return -1;
     }
     if (generateSemaphore(goodStockShareMemoryId) == -1) {
@@ -211,13 +211,13 @@ int initializeExchangeGoods() {
 
     /* Generate shared memory for good request */
     goodRequestShareMemoryId = generateShareMemory(sizeof(Goods) * configArr[SO_MERCI]);
-    if (goodStockShareMemoryId == -1) {
+    if (goodRequestShareMemoryId == -1) {
         printf("Error during creation of shared memory for goods request\n");
         return -1;
     }
     arrReques = (Goods*) shmat(goodRequestShareMemoryId, NULL, 0);
     if (arrReques == (void*) -1) {
-        printf("Error during semaphore creation\n");
+        printf("Error during request type assigne\n");
         return -1;
     }
     if (generateSemaphore(goodRequestShareMemoryId) == -1) {

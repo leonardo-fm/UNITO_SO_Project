@@ -1,5 +1,8 @@
 #!/bin/bash
 
+killall -9 nave
+killall -9 porto
+
 ME=lo
 
 IPCS_S=`ipcs -s | egrep "0x[0-9a-f]+ [0-9]+" | grep $ME | cut -f2 -d" "`
