@@ -45,9 +45,14 @@ void handle_boat_simulation_signals(int signal) {
         /* Start of the simulation */
         case SIGUSR1:
             break;
-            
-        /* New day of simulation */
+
+        /* Wait for the new day to come */
         case SIGUSR2:
+            waitForNewDay();
+            break;
+
+        /* New day of simulation */
+        case SIGCONT:
             newDay();
             break;
 
@@ -213,6 +218,17 @@ int waitForStart() {
     sigset_t sigset;
 
     sigaddset(&sigset, SIGUSR1);
+    waitRes = sigwait(&sigset, &sig);
+
+    return waitRes;
+}
+
+int waitForNewDay() {
+
+    int sig, waitRes;
+    sigset_t sigset;
+
+    sigaddset(&sigset, SIGCONT);
     waitRes = sigwait(&sigset, &sig);
 
     return waitRes;

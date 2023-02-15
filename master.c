@@ -26,6 +26,11 @@ int NUM_OF_SETTINGS = 13;
 int *configArr;
 int currentProcessId = 0;
 
+void handle_analyzer() { 
+
+    killpg(getpid(), SIGCONT);
+}
+
 void handle_master_stopProcess() { 
 
     printf("\nStopping program...\n");
@@ -80,9 +85,10 @@ int main() {
         exit(6);
     }
 
-    analyzerArgs[0] = goodAnalyzerShareMemoryId;
-    analyzerArgs[1] = boatAnalyzerShareMemoryId;
-    analyzerArgs[2] = portAnalyzerShareMemoryId;
+    analyzerArgs[0] = configShareMemoryId;
+    analyzerArgs[1] = goodAnalyzerShareMemoryId;
+    analyzerArgs[2] = boatAnalyzerShareMemoryId;
+    analyzerArgs[3] = portAnalyzerShareMemoryId;
     if (generateSubProcesses(configArr[SO_PORTI], "./bin/analyzer", 0, analyzerArgs) == -1) {
         exit(7);
     }
@@ -145,9 +151,21 @@ int initializeSingalsHandlers() {
 
     setpgrp();
 
+    signal(SIGALRM, handle_analyzer);
     signal(SIGINT, handle_master_stopProcess);
 
     return 0;
+}
+
+int waitForAnalizerToFinish() {
+
+    int sig, waitRes;
+    sigset_t sigset;
+
+    sigaddset(&sigset, SIGALRM);
+    waitRes = sigwait(&sigset, &sig);
+
+    return waitRes;
 }
 
 int work() {
@@ -161,6 +179,10 @@ int work() {
 
     while (simulationDays > 0)
     {
+        if (simulationDays < configArr[SO_DAYS]) {
+            waitForAnalizerToFinish();
+        }
+
         printf("Remaning days %d\n", simulationDays);
         simulationDays--;
 
@@ -170,7 +192,12 @@ int work() {
         }
 
         if (simulationDays > 0) {
-            killpg(getpid(), SIGUSR2);
+
+            if (simulationDays == configArr[SO_DAYS]) {
+                killpg(getpid(), SIGCONT);
+            } else {
+                killpg(getpid(), SIGUSR2);
+            }
         }
     }
 
