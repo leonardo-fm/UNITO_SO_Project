@@ -1,5 +1,5 @@
 int initializeSingalsHandlers();
-int initializeConfig(char *configShareMemoryIdString);
+int initializeConfig(char *configShareMemoryIdString, char *goodAnalyzerShareMemoryIdString, char *boatAnalyzerShareMemoryIdString);
 int initializeBoat(char *boatIdS, char *shareMemoryIdS);
 int work();
 int waitForStart();

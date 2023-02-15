@@ -1,5 +1,5 @@
 int initializeSingalsHandlers();
-int initializeConfig(char *configShareMemoryIdString);
+int initializeConfig(char *configShareMemoryIdString, char *goodAnalyzerShareMemoryIdString, char *portAnalyzerShareMemoryIdString);
 int initializePort(char *portIdString, char *portShareMemoryIdS, char *goodShareMemoryIdS);
 int initializePortStruct(char *portIdString, char *portShareMemoryIdS);
 int initializeExchangeGoods();

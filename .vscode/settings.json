@@ -13,6 +13,7 @@
         "errno.h": "c",
         "models.h": "c",
         "stdio.h": "c",
-        "utilities.h": "c"
+        "utilities.h": "c",
+        "nave.h": "c"
     }
 }

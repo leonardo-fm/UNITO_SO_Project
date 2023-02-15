@@ -12,14 +12,19 @@
 #include "lib/config.h"
 #include "lib/utilities.h"
 
-#include "master.h"
+#include "lib/master.h"
 
 int configShareMemoryId;
 int goodShareMemoryId;
 int portShareMemoryId;
 
+int goodAnalyzerShareMemoryId;
+int boatAnalyzerShareMemoryId;
+int portAnalyzerShareMemoryId;
+
 int NUM_OF_SETTINGS = 13;
 int *configArr;
+int currentProcessId = 0;
 
 void handle_master_stopProcess() { 
 
@@ -30,6 +35,10 @@ void handle_master_stopProcess() {
 }
 
 int main() {
+
+    int analyzerArgs[3];
+    int portArgs[5];
+    int boatArgs[4];
 
     setpgid(getpid(), getpid());
 
@@ -51,15 +60,43 @@ int main() {
         exit(3);
     }
 
+    /* ----- ANALYZER ----- */
+    goodAnalyzerShareMemoryId = generateShareMemory(
+        sizeof(goodDailyDump) * configArr[SO_MERCI] * (configArr[SO_NAVI] + configArr[SO_PORTI]));
+    if (goodAnalyzerShareMemoryId == -1) {
+        printf("Error during creation of shared memory for good analyzer\n");
+        exit(4);
+    }
+
+    boatAnalyzerShareMemoryId = generateShareMemory(sizeof(boatDailyDump) * configArr[SO_NAVI]);
+    if (boatAnalyzerShareMemoryId == -1) {
+        printf("Error during creation of shared memory for boat analyzer\n");
+        exit(5);
+    }
+
+    portAnalyzerShareMemoryId = generateShareMemory(sizeof(portDailyDump) * configArr[SO_PORTI]);
+    if (portAnalyzerShareMemoryId == -1) {
+        printf("Error during creation of shared memory for port analyzer\n");
+        exit(6);
+    }
+
+    analyzerArgs[0] = goodAnalyzerShareMemoryId;
+    analyzerArgs[1] = boatAnalyzerShareMemoryId;
+    analyzerArgs[2] = portAnalyzerShareMemoryId;
+    if (generateSubProcesses(configArr[SO_PORTI], "./bin/analyzer", 0, analyzerArgs) == -1) {
+        exit(7);
+    }
+
+
     /* ----- GOODS ----- */
     goodShareMemoryId = generateShareMemory(sizeof(Goods) * configArr[SO_MERCI]);
     if (goodShareMemoryId == -1) {
         printf("Error during creation of shared memory for goods\n");
-        exit(4);
+        exit(8);
     }
 
     if (initializeGoods(goodShareMemoryId) == -1) {
-        exit(5);
+        exit(9);
     }
 
 
@@ -67,29 +104,38 @@ int main() {
     portShareMemoryId = generateShareMemory(sizeof(Port) * configArr[SO_PORTI]);
     if (portShareMemoryId == -1) {
         printf("Error during creation of shared memory for ports\n");
-        exit(6);
+        exit(10);
     }
 
-    if (generateSubProcesses(configArr[SO_PORTI], "./bin/porto", configShareMemoryId, portShareMemoryId, goodShareMemoryId) == -1) {
-        exit(7);
+    portArgs[0] = configShareMemoryId;
+    portArgs[1] = portShareMemoryId;
+    portArgs[2] = goodShareMemoryId;
+    portArgs[3] = goodAnalyzerShareMemoryId;
+    portArgs[4] = portAnalyzerShareMemoryId;
+    if (generateSubProcesses(configArr[SO_PORTI], "./bin/porto", 1, portArgs) == -1) {
+        exit(11);
     }
 
 
     /* ----- BOATS ----- */
-    if (generateSubProcesses(configArr[SO_NAVI], "./bin/nave", configShareMemoryId, portShareMemoryId, 0) == -1) {
-        exit(8);
+    boatArgs[0] = configShareMemoryId;
+    boatArgs[1] = portShareMemoryId;
+    boatArgs[2] = goodAnalyzerShareMemoryId;
+    boatArgs[3] = boatAnalyzerShareMemoryId;
+    if (generateSubProcesses(configArr[SO_NAVI], "./bin/nave", 1, boatArgs) == -1) {
+        exit(12);
     }
 
-sleep(1);
+
     /* ----- START SIMULATION ----- */
     if (work() == -1) {
         printf("Error during master work\n");
-        exit(9);
+        exit(13);
     }
 
     if (cleanup() == -1) {
         printf("Cleanup failed\n");
-        exit(10);
+        exit(14);
     }
 
     return 0;
@@ -146,14 +192,37 @@ int generateShareMemory(int sizeOfSegment) {
 
 /* Generate processes by forking master and using execve */
 /* Return 0 if the processes has been loaded succesfully, -1 if some errors occurred. */
-int generateSubProcesses(int nOfProcess, char *execFilePath, int configShareMemoryId, int portShareMemoryId, int goodShareMemoryId) {
+int generateSubProcesses(int nOfProcess, char *execFilePath, int includeProceduralId, int *arguments) {
     
-    int i = 0;    
+    int i, arraySize, argSize;    
+    char **args;
 
     if(nOfProcess <= 0) {
         return 0;
     }
 
+    argSize = (int) sizeof(arguments) / sizeof(arguments[0]);
+    arraySize = argSize + includeProceduralId + 1;
+    args = malloc(arraySize);
+    for (i = 0; i < arraySize; i++) {
+        args[i] = (char *) malloc(sizeof(char) * 12);
+    }
+    
+    for (i = 0 + includeProceduralId; i < argSize + includeProceduralId; i++) {
+        
+        char key[12];
+    
+        if (sprintf(key, "%d", arguments[i]) == -1) {
+            printf("Error during conversion of the argument %d° to a string\n", i);
+            return -1;
+        }
+
+        args[i] = key;
+    }
+    
+    args[argSize + includeProceduralId] = '\0';
+
+    i = 0;
     while (i++ < nOfProcess)
     {
         int id = fork();
@@ -163,39 +232,18 @@ int generateSubProcesses(int nOfProcess, char *execFilePath, int configShareMemo
         }
         if (id == 0) {  
 
-            char *args[5];
+            /* If includeProceduralId == 1 set in the first position the id of the process */
+            if (includeProceduralId == 1) {
 
-            char configShareMemoryIdString[12];
-            char idS[12];
-            char portShareMemoryIdString[12];
-            char goodShareMemoryIdString[12];
+                char key[12];
             
-            if (sprintf(configShareMemoryIdString, "%d", configShareMemoryId) == -1) {
-                printf("Error during conversion of the config id of shared memory to a string\n");
-                return -1;
-            }
-            args[0] = configShareMemoryIdString;
+                if (sprintf(key, "%d", currentProcessId++) == -1) {
+                    printf("Error during conversion of the id to a string\n");
+                    return -1;
+                }
 
-            /* i - 1 because i need to have the ids to start from 0 to n */
-            if (sprintf(idS, "%d", (i - 1)) == -1) {
-                printf("Error during conversion of the id to a string\n");
-                return -1;
+                args[0] = key;
             }
-            args[1] = idS;
-
-            if (sprintf(portShareMemoryIdString, "%d", portShareMemoryId) == -1) {
-                printf("Error during conversion of the port id of shared memory to a string\n");
-                return -1;
-            }
-            args[2] = portShareMemoryIdString;
-
-            if (sprintf(goodShareMemoryIdString, "%d", goodShareMemoryId) == -1) {
-                printf("Error during conversion of the good id of shared memory to a string\n");
-                return -1;
-            }
-            args[3] = goodShareMemoryIdString;
-            
-            args[4] = NULL;
 
             if (execve(execFilePath, args, NULL) == -1) {
                 printf("Error during innesting of the file %s\n", execFilePath);
@@ -203,6 +251,8 @@ int generateSubProcesses(int nOfProcess, char *execFilePath, int configShareMemo
             }
         } 
     }
+
+    free(args);
 
     return 0;
 }

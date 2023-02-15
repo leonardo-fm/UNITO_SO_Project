@@ -20,12 +20,14 @@
 #include "lib/config.h"
 #include "lib/msgPortProtocol.h"
 
-#include "nave.h"
+#include "lib/nave.h"
 
-int NUM_OF_SETTINGS = 13;
 int *configArr;
 
-int portSharedMemoryPointer; 
+int goodAnalyzerSharedMemoryId; 
+int boatAnalyzerSharedMemoryId; 
+
+int portSharedMemoryId; 
 int currentMsgQueueId = -1;
 int currentPort = -1;
 int readingMsgQueue = -1;
@@ -65,19 +67,19 @@ void handle_boat_stopProcess() {
     exit(0);
 }
 
-
+/* argv[0]=id | argv[1]=configsh | argv[2]=portsh | argv[3]=ganalizersh | argv[4]=banalyzersh */
 int main(int argx, char *argv[]) {
 
     (void) argx;
     initializeEnvironment();
     initializeSingalsHandlers();
 
-    if (initializeConfig(argv[0]) == -1) {
+    if (initializeConfig(argv[1], argv[3], argv[4]) == -1) {
         printf("Initialization of boat config failed\n");
         exit(1);
     }
 
-    if (initializeBoat(argv[1], argv[2]) == -1) {
+    if (initializeBoat(argv[0], argv[2]) == -1) {
         printf("Initialization of boat %s failed\n", argv[0]);
         exit(2);
     }
@@ -88,7 +90,7 @@ int main(int argx, char *argv[]) {
     }
 
     if (cleanup() == -1) {
-        printf("Main Cleanup failed\n");
+        printf("Boat cleanup failed\n");
         exit(4);
     }
 
@@ -114,19 +116,24 @@ int initializeSingalsHandlers() {
     return 0;
 }
 
-int initializeConfig(char *configShareMemoryIdString) {
+int initializeConfig(char *configShareMemoryIdString, char *goodAnalyzerShareMemoryIdString, char *boatAnalyzerShareMemoryIdString) {
 
     char *p;
     int configShareMemoryId = strtol(configShareMemoryIdString, &p, 10);
+    
+    goodAnalyzerSharedMemoryId = strtol(goodAnalyzerShareMemoryIdString, &p, 10);
+    boatAnalyzerSharedMemoryId = strtol(boatAnalyzerShareMemoryIdString, &p, 10);
+    
     configArr = (int*) shmat(configShareMemoryId, NULL, 0);
     if (configArr == (void*) -1) {
+        printf("The config key as failed to be conveted in boat\n");
         return -1;
     }
 
     return 0;
 }
 
-int initializeBoat(char *boatIdS, char *shareMemoryIdS) {
+int initializeBoat(char *boatIdS, char *portShareMemoryIdS) {
 
     int i = 0;
     char *p;
@@ -134,9 +141,9 @@ int initializeBoat(char *boatIdS, char *shareMemoryIdS) {
     boat.position = getRandomCoordinates(configArr[SO_LATO], configArr[SO_LATO]);
     boat.capacityInTon = configArr[S0_CAPACITY];
     boat.speed = configArr[SO_SPEED];
-    boat.state = In_Sea;
+    boat.state = In_Sea_Empty;
 
-    portSharedMemoryPointer = strtol(shareMemoryIdS, &p, 10);
+    portSharedMemoryId = strtol(portShareMemoryIdS, &p, 10);
 
     /* Initialization of the hold */
     goodHold = malloc(sizeof(Goods) * configArr[SO_MERCI]);
@@ -182,11 +189,18 @@ int work() {
                 return -1;
             }
 
+            boat.state = In_Port_Exchange;
             tradeStatus = openTrade();
             if (tradeStatus == -1) {
                 printf("Error during trade\n");
                 return -1;
             } 
+
+            if (haveIGoodsToSell() == 0) {
+                boat.state = In_Sea;
+            } else {
+                boat.state = In_Sea_Empty;
+            }
         }
     }
 
@@ -206,7 +220,13 @@ int waitForStart() {
 
 int newDay() {
 
-    int i = 0;
+    int i, goodReferenceId, boatReferenceId;
+    goodDailyDump *goodArr;
+    goodDailyDump gdd;
+
+    boatDailyDump *boatArr;
+    boatDailyDump bdd;
+
     for (i = 0; i < configArr[SO_MERCI]; i++) {
         if(goodHold[i].remaningDays > 0) {
             goodHold[i].remaningDays--;
@@ -216,7 +236,54 @@ int newDay() {
         }
     }
 
-    /* TODO Dealy dump */
+    /* Send goods data */
+    goodReferenceId = boat.id * configArr[SO_MERCI];
+    goodArr = (goodDailyDump*) shmat(goodAnalyzerSharedMemoryId, NULL, 0);
+    if (goodArr == (void*) -1) {
+        printf("Error during opening good analyzer share memory in boat\n");
+        return -1;
+    }
+
+    for (i = 0; i < configArr[SO_MERCI]; i++) {
+        
+        gdd.goodId = i;
+        if (goodHold[i].state == Expired_In_The_Boat) {
+            gdd.Good_Expired_In_The_Boat = goodHold[i].loadInTon;
+            
+            goodHold[i].loadInTon = 0;
+            goodHold[i].state = Undefined;
+        } else {
+            gdd.Good_Expired_In_The_Boat = 0;
+        }
+        gdd.Good_In_The_Boat = goodHold[i].loadInTon;
+
+        gdd.Good_Delivered = 0;
+        gdd.Good_Expired_In_The_Port = 0;
+        gdd.Good_In_The_Port = 0;
+
+        memcpy(&goodArr[goodReferenceId + i], &gdd, sizeof(goodDailyDump)); 
+    }
+
+    if (shmdt(goodArr) == -1) {
+        printf("The arr good detach failed in boat\n");
+        return -1;
+    }
+
+    /* Send boat data */
+    boatReferenceId = boat.id - configArr[SO_PORTI];
+    boatArr = (boatDailyDump*) shmat(boatAnalyzerSharedMemoryId, NULL, 0);
+    if (boatArr == (void*) -1) {
+        printf("Error during opening boat analyzer share memory in boat\n");
+        return -1;
+    }
+
+    bdd.boatState = boat.state;
+    boatArr[boatReferenceId] = bdd;
+
+    if (shmdt(boatArr) == -1) {
+        printf("The arr boat detach failed\n");
+        return -1;
+    }
 
     return 0;
 }
@@ -228,7 +295,7 @@ int gotoPort() {
     double num, distance;
     long waitTimeNs;
 
-    portArr = (Port*) shmat(portSharedMemoryPointer, NULL, 0);
+    portArr = (Port*) shmat(portSharedMemoryId, NULL, 0);
     if (portArr == (void*) -1) {
         printf("Error during opening ports coordinate share memory\n");
         return -1;
@@ -248,14 +315,14 @@ int gotoPort() {
         + (double)(((portArr[currentPort].position.y - boat.position.y) * (portArr[currentPort].position.y - boat.position.y)));
     distance = sqrt(num);
 
-    waitTimeNs = getNanoSeconds(distance / configArr[SO_SPEED]);
-    if (safeWait(0, waitTimeNs) == -1) {
-        printf("Error while waiting to go to in a port\n");
+    if (shmdt(portArr) == -1) {
+        printf("The arr port coordinates detach failed\n");
         return -1;
     }
 
-    if (shmdt(portArr) == -1) {
-        printf("The arr port coordinates detach failed\n");
+    waitTimeNs = getNanoSeconds(distance / configArr[SO_SPEED]);
+    if (safeWait(0, waitTimeNs) == -1) {
+        printf("Error while waiting to go to in a port\n");
         return -1;
     }
 
@@ -274,7 +341,7 @@ int setupTrade(int portId) {
         return -1;
     }
     
-    portArr = (Port*) shmat(portSharedMemoryPointer, NULL, 0);
+    portArr = (Port*) shmat(portSharedMemoryId, NULL, 0);
     if (portArr == (void*) -1) {
         printf("Error during opening ports coordinate share memory\n");
         return -1;
@@ -450,7 +517,7 @@ int haveIGoodsToBuy() {
 
 int sellGoods() {
 
-    int waitResponse, i;
+    int waitResponse, i, totalGoodSold;
     PortMessage response;
 
     char semaphoreKey[12];
@@ -508,6 +575,7 @@ int sellGoods() {
     }
 
     /* Sell all available goods */
+    totalGoodSold = 0;
     for (i = 0; i < configArr[SO_MERCI]; i++) {
         if (goodHold[i].loadInTon > 0 && goodHold[i].state != Expired_In_The_Boat) {
             
@@ -531,6 +599,16 @@ int sellGoods() {
                 goodHold[i].loadInTon -= exchange;
             }
 
+            /* Set good state for boat */
+            if (goodHold[i].loadInTon == 0) {
+                goodHold[i].state = Undefined;
+            }
+
+            /* Set good state for port */
+            if (goodArr[i].loadInTon > 0) {
+                goodArr[i].state = In_The_Port;
+            }
+
             sem_post(semaphore);
 
             waitTimeNs = getNanoSeconds(exchange / configArr[SO_LOADSPEED]);
@@ -538,7 +616,15 @@ int sellGoods() {
                 printf("Error while waiting to exchange\n");
                 return -1;
             }
+
+            totalGoodSold += exchange;
         }    
+    }
+
+    /* Send sell report to the port */
+    if (sendMessage(writingMsgQueue, PA_SE_SUMMARY, totalGoodSold, 0) == -1) {
+        printf("Failed to send PA_SE_SUMMARY comunication\n");
+        return -1;
     }
 
     if (sem_close(semaphore) < 0) {
@@ -556,7 +642,7 @@ int sellGoods() {
 
 int buyGoods() {
 
-    int waitResponse, i;
+    int waitResponse, i, totalGoodRequested;
     PortMessage response;
     
     char semaphoreKey[12];
@@ -614,6 +700,7 @@ int buyGoods() {
     }
 
     /* Buy some available goods */
+    totalGoodRequested = 0;
     for (i = 0; i < configArr[SO_MERCI]; i++) {
         if (goodArr[i].loadInTon > 0 && goodArr[i].state != Expired_In_The_Port) {
             
@@ -624,6 +711,10 @@ int buyGoods() {
 
             availableSpace = getSpaceAvailableInTheHold();
             exchange = 0;
+
+            if (goodArr[i].loadInTon == 0) {
+                goodArr[i].state = In_The_Boat;
+            }
 
             /* If x >= 0 OK, x < 0 not enought good to buy */
             if (goodArr[i].loadInTon - availableSpace >= 0) {
@@ -636,6 +727,16 @@ int buyGoods() {
                 goodHold[i].loadInTon += exchange;
             }
 
+            /* Set good state for boat */
+            if (goodHold[i].loadInTon > 0) {
+                goodHold[i].state = In_The_Boat;
+            }
+
+            /* Set good state for port */
+            if (goodArr[i].loadInTon == 0) {
+                goodArr[i].state = Undefined;
+            }
+
             sem_post(semaphore);
 
             waitTimeNs = getNanoSeconds(exchange / configArr[SO_LOADSPEED]);
@@ -643,11 +744,19 @@ int buyGoods() {
                 printf("Error while waiting to exchange\n");
                 return -1;
             }
+
+            totalGoodRequested += exchange;
             
             if (getSpaceAvailableInTheHold() == 0) {
                 break;
             }
         }    
+    }
+
+    /* Send request report to the port */
+    if (sendMessage(writingMsgQueue, PA_RQ_SUMMARY, totalGoodRequested, 0) == -1) {
+        printf("Failed to send PA_RQ_SUMMARY comunication\n");
+        return -1;
     }
 
     if (sem_close(semaphore) < 0) {

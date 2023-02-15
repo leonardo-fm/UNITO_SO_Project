@@ -4,7 +4,9 @@ typedef enum {
     PA_SETUP,       /* Create a queue for read and a queue for write */
     PA_ACCEPT,      /* Can i use a quay? */   
     PA_SE_GOOD,     /* Sell good */
+    PA_SE_SUMMARY,  /* Sell good summary */
     PA_RQ_GOOD,     /* Request good */
+    PA_RQ_SUMMARY,  /* Request good summary */
     PA_EOT          /* End of trasmission */     
 } ProtocolActions;
 
@@ -14,7 +16,7 @@ typedef struct {
         char msg[sizeof(int) * 3];
         struct {
             ProtocolActions action;
-            /* Use for shared memory id / queue id */
+            /* Use for shared memory id / queue id / summary */
             int data1;
             /* Use for semaphore key / queue id */
             int data2;

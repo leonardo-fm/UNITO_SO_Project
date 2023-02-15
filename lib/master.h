@@ -1,7 +1,7 @@
 int initializeSingalsHandlers();
 int work();
 int generateShareMemory(int sizeOfSegment);
-int generateSubProcesses(int nOfProcess, char *execFilePath, int configShareMemoryId, int portShareMemoryId, int goodShareMemoryId);
+int generateSubProcesses(int nOfProcess, char *execFilePath, int includeProceduralId, int *arguments);
 int initializeGoods(int goodShareMemoryId);
 int generateGoods(int goodShareMemoryId);
 int generateSemaphore();

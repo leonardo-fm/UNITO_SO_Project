@@ -6,7 +6,7 @@ run: build
 	clear 
 	./bin/master
 
-build: master nave porto
+build: master nave porto analyzer
 
 master: master.c
 	gcc $(CFLAGS) $(SFLAGS) -o bin/master master.c $(LFLAGS) -pthread
@@ -16,6 +16,9 @@ nave: nave.c
 
 porto: porto.c
 	gcc $(CFLAGS) $(SFLAGS) -o bin/porto porto.c $(LFLAGS) -pthread
+
+analyzer: analyzer.c
+	gcc $(CFLAGS) $(SFLAGS) -o bin/analyzer analyzer.c $(LFLAGS) -pthread
 
 clean:
 	$(RM) bin/*

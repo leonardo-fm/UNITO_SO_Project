@@ -17,10 +17,12 @@
 #include "lib/utilities.h"
 #include "lib/msgPortProtocol.h"
 
-#include "porto.h"
+#include "lib/porto.h"
 
-int NUM_OF_SETTINGS = 13;
 int *configArr;
+
+int goodAnalyzerSharedMemoryId; 
+int portAnalyzerSharedMemoryId; 
  
 int goodStockShareMemoryId;
 int goodRequestShareMemoryId;
@@ -29,6 +31,7 @@ Port port;
 Goods **goodExchange;
 
 int simulationRunning = 1;
+int totalDailyGoodsSold, totalDailyGoodsRecived;
 
 void handle_port_simulation_signals(int signal) {
 
@@ -60,19 +63,20 @@ void handle_port_stopProcess() {
     exit(0);
 }
 
+/* argv[0]=id | argv[1]=configsh | argv[2]=portsh | argv[3]=goodsh | argv[4]=ganalizersh | argv[5]=pc analyzersh */
 int main(int argx, char *argv[]) {
 
     (void) argx;
     initializeEnvironment();
     initializeSingalsHandlers();
 
-    if (initializeConfig(argv[0]) == -1) {
+    if (initializeConfig(argv[1], argv[4], argv[5]) == -1) {
         printf("Initialization of port config failed\n");
         exit(1);
     }
 
-    if (initializePort(argv[1], argv[2], argv[3]) == -1) {
-        printf("Initialization of port %s failed\n", argv[1]);
+    if (initializePort(argv[0], argv[2], argv[3]) == -1) {
+        printf("Initialization of port %s failed\n", argv[0]);
         exit(2);
     }
 
@@ -82,7 +86,7 @@ int main(int argx, char *argv[]) {
     }
 
     if (cleanup() == -1) {
-        printf("Cleanup failed\n");
+        printf("Port cleanup failed\n");
         exit(4);
     }
 
@@ -109,13 +113,17 @@ int initializeSingalsHandlers() {
 }
 
 /* Recover the array of the configurations values */
-int initializeConfig(char *configShareMemoryIdString) {
+int initializeConfig(char *configShareMemoryIdString, char *goodAnalyzerShareMemoryIdString, char *portAnalyzerShareMemoryIdString) {
 
     char *p;
     int configShareMemoryId = strtol(configShareMemoryIdString, &p, 10);
     
+    goodAnalyzerSharedMemoryId = strtol(goodAnalyzerShareMemoryIdString, &p, 10);
+    portAnalyzerSharedMemoryId = strtol(portAnalyzerShareMemoryIdString, &p, 10);
+    
     configArr = (int*) shmat(configShareMemoryId, NULL, 0);
     if (configArr == (void*) -1) {
+        printf("The config key as failed to be conveted in port\n");
         return -1;
     }
 
@@ -460,11 +468,17 @@ int work() {
                             return -1;
                         };
                         break;
+                    case PA_SE_SUMMARY:
+                        totalDailyGoodsRecived += receivedMsg.msg.data.data1;
+                        break;
                     case PA_RQ_GOOD:
                         if (handlePA_RQ_GOOD(writingMsgQueue) == -1) {
                             printf("Error during RQ_GOOD handling\n");
                             return -1;
                         };
+                        break;
+                    case PA_RQ_SUMMARY:
+                        totalDailyGoodsRecived += receivedMsg.msg.data.data1;
                         break;
                     case PA_EOT:
                         if (handlePA_EOT(writingMsgQueue) == -1) {
@@ -536,8 +550,14 @@ int freePendingMsgs() {
 
 int newDay() {
     
-    int i;
+    int i, totalGoodInStock, goodReferenceId;
     Goods *arrStock;
+
+    goodDailyDump *goodArr;
+    goodDailyDump gdd;
+
+    portDailyDump *portArr;
+    portDailyDump pdd;
 
     arrStock = (Goods*) shmat(goodStockShareMemoryId, NULL, 0);
     if (arrStock == (void*) -1) {
@@ -545,13 +565,69 @@ int newDay() {
         return -1;
     }
 
+    totalGoodInStock = 0;
     for (i = 0; i < configArr[SO_MERCI]; i++) {
         if(arrStock[i].remaningDays > 0) {
             arrStock[i].remaningDays--;
             if (arrStock[i].remaningDays == 0) {
                 arrStock[i].state = Expired_In_The_Port;
+            } else {
+                totalGoodInStock += arrStock[i].loadInTon;
             }
         }
+    }
+
+    /* Send goods data */
+    goodReferenceId = port.id * configArr[SO_MERCI];
+    goodArr = (goodDailyDump*) shmat(goodAnalyzerSharedMemoryId, NULL, 0);
+    if (goodArr == (void*) -1) {
+        printf("Error during opening good analyzer share memory in port\n");
+        return -1;
+    }
+
+    for (i = 0; i < configArr[SO_MERCI]; i++) {
+        
+        gdd.goodId = i;
+        if (arrStock[i].state == Expired_In_The_Port) {
+            gdd.Good_Expired_In_The_Port = arrStock[i].loadInTon;
+            
+            arrStock[i].loadInTon = 0;
+            arrStock[i].state = Undefined;
+        } else {
+            gdd.Good_Expired_In_The_Port = 0;
+        }
+        gdd.Good_In_The_Port = arrStock[i].loadInTon;
+        gdd.Good_Delivered = totalDailyGoodsRecived;
+
+        gdd.Good_Expired_In_The_Boat = 0;
+        gdd.Good_In_The_Boat = 0;
+
+        memcpy(&goodArr[goodReferenceId + i], &gdd, sizeof(goodDailyDump)); 
+    }
+
+    if (shmdt(goodArr) == -1) {
+        printf("The arr good detach failed in port\n");
+        return -1;
+    }
+
+    /* Send port data */
+    portArr = (portDailyDump*) shmat(portAnalyzerSharedMemoryId, NULL, 0);
+    if (portArr == (void*) -1) {
+        printf("Error during opening port analyzer share memory in port\n");
+        return -1;
+    }
+
+    pdd.totalGoodInStock = totalGoodInStock;
+    pdd.totalGoodRecived = totalDailyGoodsRecived;
+    pdd.totalGoodSold = totalDailyGoodsSold;
+    pdd.totalQuays = port.quays;
+    pdd.busyQuays = port.quays - port.availableQuays;
+
+    portArr[port.id] = pdd;
+
+    if (shmdt(portArr) == -1) {
+        printf("The arr port detach failed\n");
+        return -1;
     }
 
     if (shmdt(arrStock) == -1) {
@@ -559,7 +635,8 @@ int newDay() {
         return -1;
     }
 
-    /* TODO Dealy dump */
+    totalDailyGoodsRecived = 0;
+    totalDailyGoodsSold = 0;
 
     return 0;
 }

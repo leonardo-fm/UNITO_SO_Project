@@ -46,8 +46,9 @@ typedef struct {
 /* BOAT */
 
 typedef enum { 
-    In_Port,
-    In_Sea
+    In_Sea,
+    In_Sea_Empty,
+    In_Port_Exchange
 } BoatState;
 
 typedef struct {
@@ -68,3 +69,27 @@ typedef struct {
     int quays;
     int availableQuays;
 } Port;
+
+
+/* ANALYZER */
+
+typedef struct {
+    int goodId;
+    int Good_In_The_Port;
+    int Good_In_The_Boat;
+    int Good_Delivered;
+    int Good_Expired_In_The_Port;
+    int Good_Expired_In_The_Boat;
+} goodDailyDump;
+
+typedef struct {
+    BoatState boatState;
+} boatDailyDump;
+
+typedef struct {
+    int totalGoodInStock;
+    int totalGoodSold;
+    int totalGoodRecived;
+    int busyQuays;
+    int totalQuays;
+} portDailyDump;
