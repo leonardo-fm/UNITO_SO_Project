@@ -1,6 +1,7 @@
 #define _GNU_SOURCES
 
 #include <stdio.h>
+#include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <errno.h>
@@ -24,11 +25,12 @@ int portAnalyzerShareMemoryId;
 
 int NUM_OF_SETTINGS = 13;
 int *configArr;
-int currentProcessId = 0;
+int currentProcessId;
+int analyzerFinished = 1;
 
-void handle_analyzer() { 
+void handle_analyzer() {
 
-    killpg(getpid(), SIGCONT);
+    analyzerFinished = 1;
 }
 
 void handle_master_stopProcess() { 
@@ -41,7 +43,7 @@ void handle_master_stopProcess() {
 
 int main() {
 
-    int analyzerArgs[3];
+    int analyzerArgs[4];
     int portArgs[5];
     int boatArgs[4];
 
@@ -89,7 +91,7 @@ int main() {
     analyzerArgs[1] = goodAnalyzerShareMemoryId;
     analyzerArgs[2] = boatAnalyzerShareMemoryId;
     analyzerArgs[3] = portAnalyzerShareMemoryId;
-    if (generateSubProcesses(configArr[SO_PORTI], "./bin/analyzer", 0, analyzerArgs) == -1) {
+    if (generateSubProcesses(1, "./bin/analyzer", 0, analyzerArgs, 4) == -1) {
         exit(7);
     }
 
@@ -118,7 +120,7 @@ int main() {
     portArgs[2] = goodShareMemoryId;
     portArgs[3] = goodAnalyzerShareMemoryId;
     portArgs[4] = portAnalyzerShareMemoryId;
-    if (generateSubProcesses(configArr[SO_PORTI], "./bin/porto", 1, portArgs) == -1) {
+    if (generateSubProcesses(configArr[SO_PORTI], "./bin/porto", 1, portArgs, 5) == -1) {
         exit(11);
     }
 
@@ -128,10 +130,12 @@ int main() {
     boatArgs[1] = portShareMemoryId;
     boatArgs[2] = goodAnalyzerShareMemoryId;
     boatArgs[3] = boatAnalyzerShareMemoryId;
-    if (generateSubProcesses(configArr[SO_NAVI], "./bin/nave", 1, boatArgs) == -1) {
+    if (generateSubProcesses(configArr[SO_NAVI], "./bin/nave", 1, boatArgs, 4) == -1) {
         exit(12);
     }
 
+    /* TODO removit */
+    sleep(1);
 
     /* ----- START SIMULATION ----- */
     if (work() == -1) {
@@ -168,40 +172,53 @@ int waitForAnalizerToFinish() {
     return waitRes;
 }
 
+int waitForAnalizerToCollectData() {
+
+    int sig, waitRes;
+    sigset_t sigset;
+
+    sigaddset(&sigset, SIGTTIN);
+    waitRes = sigwait(&sigset, &sig);
+
+    return waitRes;
+}
+
 int work() {
 
-    int simulationDays = configArr[SO_DAYS];
+    int simulationDays = 0;
 
     /* Set the current group different from itselfe to avoid interupt from custom signals */
     setpgid(getpid(), getppid());
 
     killpg(getpid(), SIGUSR1);
 
-    while (simulationDays > 0)
+    while (simulationDays < configArr[SO_DAYS])
     {
-        if (simulationDays < configArr[SO_DAYS]) {
+        if (analyzerFinished != 1) {
             waitForAnalizerToFinish();
         }
 
-        printf("Remaning days %d\n", simulationDays);
-        simulationDays--;
+        printf("Day number %d\n", simulationDays);
+        simulationDays++;
 
         if (safeWait(1, 0l) == -1) {
             printf("Error while waiting next day master\n");
             return -1;
         }
 
-        if (simulationDays > 0) {
+        printf("Send SIGUR2...\nSending in group %d\n", getpid());
+        killpg(getpid(), SIGUSR2);
 
-            if (simulationDays == configArr[SO_DAYS]) {
-                killpg(getpid(), SIGCONT);
-            } else {
-                killpg(getpid(), SIGUSR2);
-            }
+        if (simulationDays < configArr[SO_DAYS]) {
+
+            waitForAnalizerToCollectData();
+            analyzerFinished = 0;
+
+            killpg(getpid(), SIGCONT);
         }
     }
 
-    killpg(getpid(), SIGSYS);
+    killpg(getpid(), SIGSYS); /*Si svegliano? essendo che i porti e navi stano aspettando un SIGCONT*/
     printf("Simulation finished\n");
 
     return 0;
@@ -219,59 +236,59 @@ int generateShareMemory(int sizeOfSegment) {
 
 /* Generate processes by forking master and using execve */
 /* Return 0 if the processes has been loaded succesfully, -1 if some errors occurred. */
-int generateSubProcesses(int nOfProcess, char *execFilePath, int includeProceduralId, int *arguments) {
+int generateSubProcesses(int nOfProcess, char *execFilePath, int includeProceduralId, int *arguments, int argSize) {
     
-    int i, arraySize, argSize;    
+    int i, arraySize;    
     char **args;
 
     if(nOfProcess <= 0) {
         return 0;
     }
 
-    argSize = (int) sizeof(arguments) / sizeof(arguments[0]);
     arraySize = argSize + includeProceduralId + 1;
-    args = malloc(arraySize);
+    args = malloc(sizeof(char *) * arraySize);
     for (i = 0; i < arraySize; i++) {
         args[i] = (char *) malloc(sizeof(char) * 12);
     }
-    
+
     for (i = 0 + includeProceduralId; i < argSize + includeProceduralId; i++) {
         
         char key[12];
     
-        if (sprintf(key, "%d", arguments[i]) == -1) {
+        if (sprintf(key, "%d", arguments[i - includeProceduralId]) == -1) {
             printf("Error during conversion of the argument %d° to a string\n", i);
             return -1;
         }
 
-        args[i] = key;
+        memcpy(args[i], key, sizeof(char) * 12); 
     }
-    
-    args[argSize + includeProceduralId] = '\0';
+ 
+    args[arraySize - 1] = '\0';
 
     i = 0;
     while (i++ < nOfProcess)
     {
         int id = fork();
+        
+        /* If includeProceduralId == 1 set in the first position the id of the process */
+        if (includeProceduralId == 1) {
+
+            char key[12];
+        
+            if (sprintf(key, "%d", currentProcessId) == -1) {
+                printf("Error during conversion of the id to a string\n");
+                return -1;
+            }
+
+            memcpy(args[0], key, sizeof(char) * 12); 
+            currentProcessId++;
+        }
+
         if (id == -1) {
             printf("Error during fork of the file %s\n", execFilePath);
             return -1;
         }
         if (id == 0) {  
-
-            /* If includeProceduralId == 1 set in the first position the id of the process */
-            if (includeProceduralId == 1) {
-
-                char key[12];
-            
-                if (sprintf(key, "%d", currentProcessId++) == -1) {
-                    printf("Error during conversion of the id to a string\n");
-                    return -1;
-                }
-
-                args[0] = key;
-            }
-
             if (execve(execFilePath, args, NULL) == -1) {
                 printf("Error during innesting of the file %s\n", execFilePath);
                 return -1;

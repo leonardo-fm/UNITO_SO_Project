@@ -43,6 +43,7 @@ void handle_port_simulation_signals(int signal) {
 
         /* Wait for the new day to come */
         case SIGUSR2:
+            dumpData();
             waitForNewDay();
             break;
 
@@ -63,7 +64,7 @@ void handle_port_simulation_signals(int signal) {
 }
 
 void handle_port_stopProcess() {
-
+    printf("Stopping port...\n");
     cleanup();
     exit(0);
 }
@@ -106,7 +107,7 @@ int initializeSingalsHandlers() {
 
     signal(SIGUSR1, handle_port_simulation_signals);
 
-    /* Use different mwthod because i need to use the handler multiple times */
+    /* Use different method because i need to use the handler multiple times */
     signalAction.sa_flags = SA_RESTART;
     signalAction.sa_handler = &handle_port_simulation_signals;
     sigaction(SIGUSR2, &signalAction, NULL);
@@ -553,19 +554,7 @@ int freePendingMsgs() {
     return 0;
 }
 
-int waitForNewDay() {
-
-    int sig, waitRes;
-    sigset_t sigset;
-
-    sigaddset(&sigset, SIGCONT);
-    waitRes = sigwait(&sigset, &sig);
-
-    return waitRes;
-}
-
-int newDay() {
-    
+int dumpData() {
     int i, totalGoodInStock, goodReferenceId;
     Goods *arrStock;
 
@@ -583,13 +572,8 @@ int newDay() {
 
     totalGoodInStock = 0;
     for (i = 0; i < configArr[SO_MERCI]; i++) {
-        if(arrStock[i].remaningDays > 0) {
-            arrStock[i].remaningDays--;
-            if (arrStock[i].remaningDays == 0) {
-                arrStock[i].state = Expired_In_The_Port;
-            } else {
-                totalGoodInStock += arrStock[i].loadInTon;
-            }
+        if(arrStock[i].state != Expired_In_The_Port) {
+            totalGoodInStock += arrStock[i].loadInTon;
         }
     }
 
@@ -653,6 +637,40 @@ int newDay() {
 
     totalDailyGoodsRecived = 0;
     totalDailyGoodsSold = 0;
+
+    return 0;
+}
+
+int waitForNewDay() {
+
+    int sig, waitRes;
+    sigset_t sigset;
+
+    sigaddset(&sigset, SIGCONT);
+    waitRes = sigwait(&sigset, &sig);
+
+    return waitRes;
+}
+
+int newDay() {
+    
+    int i;
+    Goods *arrStock;
+
+    arrStock = (Goods*) shmat(goodStockShareMemoryId, NULL, 0);
+    if (arrStock == (void*) -1) {
+        printf("Error while opening stock good\n");
+        return -1;
+    }
+
+    for (i = 0; i < configArr[SO_MERCI]; i++) {
+        if(arrStock[i].remaningDays > 0) {
+            arrStock[i].remaningDays--;
+            if (arrStock[i].remaningDays == 0) {
+                arrStock[i].state = Expired_In_The_Port;
+            }
+        }
+    }
 
     return 0;
 }

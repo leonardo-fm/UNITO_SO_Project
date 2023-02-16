@@ -3,6 +3,8 @@ int initializeConfig(char *configShareMemoryIdString, char *goodAnalyzerShareMem
 int initializeBoat(char *boatIdS, char *shareMemoryIdS);
 int work();
 int waitForStart();
+int dumpData();
+int waitForNewDay();
 int newDay();
 int gotoPort();
 int setupTrade(int portId);

@@ -48,6 +48,8 @@ void handle_boat_simulation_signals(int signal) {
 
         /* Wait for the new day to come */
         case SIGUSR2:
+            dumpData();
+            printf("Boat start waiting...\n");
             waitForNewDay();
             break;
 
@@ -67,7 +69,7 @@ void handle_boat_simulation_signals(int signal) {
 }
 
 void handle_boat_stopProcess() {
-    
+    printf("Stopping boat...\n");
     cleanup();
     exit(0);
 }
@@ -110,7 +112,7 @@ int initializeSingalsHandlers() {
 
     signal(SIGUSR1, handle_boat_simulation_signals);
 
-    /* Use different mwthod because i need to use the handler multiple times */
+    /* Use different method because i need to use the handler multiple times */
     signalAction.sa_flags = SA_RESTART;
     signalAction.sa_handler = &handle_boat_simulation_signals;
     sigaction(SIGUSR2, &signalAction, NULL);
@@ -223,18 +225,7 @@ int waitForStart() {
     return waitRes;
 }
 
-int waitForNewDay() {
-
-    int sig, waitRes;
-    sigset_t sigset;
-
-    sigaddset(&sigset, SIGCONT);
-    waitRes = sigwait(&sigset, &sig);
-
-    return waitRes;
-}
-
-int newDay() {
+int dumpData() {
 
     int i, goodReferenceId, boatReferenceId;
     goodDailyDump *goodArr;
@@ -242,15 +233,6 @@ int newDay() {
 
     boatDailyDump *boatArr;
     boatDailyDump bdd;
-
-    for (i = 0; i < configArr[SO_MERCI]; i++) {
-        if(goodHold[i].remaningDays > 0) {
-            goodHold[i].remaningDays--;
-            if (goodHold[i].remaningDays == 0) {
-                goodHold[i].state = Expired_In_The_Boat;
-            }
-        }
-    }
 
     /* Send goods data */
     goodReferenceId = boat.id * configArr[SO_MERCI];
@@ -299,6 +281,33 @@ int newDay() {
     if (shmdt(boatArr) == -1) {
         printf("The arr boat detach failed\n");
         return -1;
+    }
+
+    return 0;
+}
+
+int waitForNewDay() {
+
+    int sig, waitRes;
+    sigset_t sigset;
+
+    sigaddset(&sigset, SIGCONT);
+    waitRes = sigwait(&sigset, &sig);
+
+    return waitRes;
+}
+
+int newDay() {
+
+    int i;
+
+    for (i = 0; i < configArr[SO_MERCI]; i++) {
+        if(goodHold[i].remaningDays > 0) {
+            goodHold[i].remaningDays--;
+            if (goodHold[i].remaningDays == 0) {
+                goodHold[i].state = Expired_In_The_Boat;
+            }
+        }
     }
 
     return 0;

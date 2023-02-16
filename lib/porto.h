@@ -6,6 +6,8 @@ int initializeExchangeGoods();
 int initializePortGoods(char *goodShareMemoryIdS);
 int work();
 int waitForStart();
+int dumpData();
+int waitForNewDay();
 int freePendingMsgs();
 int newDay();
 int handlePA_ACCEPT(int queueId);
