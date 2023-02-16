@@ -49,13 +49,12 @@ void handle_boat_simulation_signals(int signal) {
         /* Wait for the new day to come */
         case SIGUSR2:
             dumpData();
-            printf("Boat start waiting...\n");
             waitForNewDay();
+            newDay();
             break;
 
-        /* New day of simulation */
+        /* Need to handle the signal for the waitForNewDay() */
         case SIGCONT:
-            newDay();
             break;
 
         /* End of the simulation */
@@ -116,6 +115,10 @@ int initializeSingalsHandlers() {
     signalAction.sa_flags = SA_RESTART;
     signalAction.sa_handler = &handle_boat_simulation_signals;
     sigaction(SIGUSR2, &signalAction, NULL);
+
+    signalAction.sa_flags = SA_RESTART;
+    signalAction.sa_handler = &handle_boat_simulation_signals;
+    sigaction(SIGCONT, &signalAction, NULL);
 
     signal(SIGSYS, handle_boat_simulation_signals);
     signal(SIGINT, handle_boat_stopProcess);
@@ -480,7 +483,7 @@ int closeTrade() {
         
         int msgResponse = receiveMessage(readingMsgQueue, &response, 0, 0);
         if (msgResponse == -1) {
-            printf("Error during weating response from EOT\n");
+            printf("Error during waiting response from EOT\n");
             return -1;
         }
 
@@ -567,7 +570,7 @@ int sellGoods() {
         
         int msgResponse = receiveMessage(readingMsgQueue, &response, 0, 0);
         if (msgResponse == -1) {
-            printf("Error during weating response from PA_SE_GOOD\n");
+            printf("Error during waiting response from PA_SE_GOOD\n");
             return -1;
         }
 
@@ -692,7 +695,7 @@ int buyGoods() {
         
         int msgResponse = receiveMessage(readingMsgQueue, &response, 0, 0);
         if (msgResponse == -1) {
-            printf("Error during weating response from PA_RQ_GOOD\n");
+            printf("Error during waiting response from PA_RQ_GOOD\n");
             return -1;
         }
 

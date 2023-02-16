@@ -9,9 +9,11 @@
 #include <fcntl.h>    
 #include <sys/shm.h>    
 #include <signal.h> 
+#include <sys/msg.h>
 
 #include "lib/config.h"
 #include "lib/utilities.h"
+#include "lib/msgPortProtocol.h"
 
 #include "lib/master.h"
 
@@ -23,15 +25,12 @@ int goodAnalyzerShareMemoryId;
 int boatAnalyzerShareMemoryId;
 int portAnalyzerShareMemoryId;
 
+int readingMsgQueue;
+int writingMsgQueue;
+
 int NUM_OF_SETTINGS = 13;
 int *configArr;
 int currentProcessId;
-int analyzerFinished = 1;
-
-void handle_analyzer() {
-
-    analyzerFinished = 1;
-}
 
 void handle_master_stopProcess() { 
 
@@ -43,7 +42,7 @@ void handle_master_stopProcess() {
 
 int main() {
 
-    int analyzerArgs[4];
+    int analyzerArgs[6];
     int portArgs[5];
     int boatArgs[4];
 
@@ -68,6 +67,9 @@ int main() {
     }
 
     /* ----- ANALYZER ----- */
+    readingMsgQueue = msgget(IPC_PRIVATE, IPC_CREAT | 0600);
+    writingMsgQueue = msgget(IPC_PRIVATE, IPC_CREAT | 0600);
+
     goodAnalyzerShareMemoryId = generateShareMemory(
         sizeof(goodDailyDump) * configArr[SO_MERCI] * (configArr[SO_NAVI] + configArr[SO_PORTI]));
     if (goodAnalyzerShareMemoryId == -1) {
@@ -91,7 +93,9 @@ int main() {
     analyzerArgs[1] = goodAnalyzerShareMemoryId;
     analyzerArgs[2] = boatAnalyzerShareMemoryId;
     analyzerArgs[3] = portAnalyzerShareMemoryId;
-    if (generateSubProcesses(1, "./bin/analyzer", 0, analyzerArgs, 4) == -1) {
+    analyzerArgs[4] = readingMsgQueue;
+    analyzerArgs[5] = writingMsgQueue;
+    if (generateSubProcesses(1, "./bin/analyzer", 0, analyzerArgs, 6) == -1) {
         exit(7);
     }
 
@@ -155,32 +159,45 @@ int initializeSingalsHandlers() {
 
     setpgrp();
 
-    signal(SIGALRM, handle_analyzer);
     signal(SIGINT, handle_master_stopProcess);
 
     return 0;
 }
 
-int waitForAnalizerToFinish() {
+int checkForAnalizerToFinish() {
 
-    int sig, waitRes;
-    sigset_t sigset;
+    PortMessage response;
 
-    sigaddset(&sigset, SIGALRM);
-    waitRes = sigwait(&sigset, &sig);
+    int msgResponse = receiveMessage(readingMsgQueue, &response, 0, 0);
+    if (msgResponse == -1) {
+        printf("Error during waiting response from PA_FINISH\n");
+        return -1;
+    }
 
-    return waitRes;
+    if (response.msg.data.action != PA_FINISH) {
+        printf("Wrong action response instead of PA_FINISH\n");
+        return -1;
+    }
+
+    return 0;
 }
 
 int waitForAnalizerToCollectData() {
 
-    int sig, waitRes;
-    sigset_t sigset;
+    PortMessage response;
 
-    sigaddset(&sigset, SIGTTIN);
-    waitRes = sigwait(&sigset, &sig);
+    int msgResponse = receiveMessage(readingMsgQueue, &response, 0, 0);
+    if (msgResponse == -1) {
+        printf("Error during waiting response from PA_DATA_COL\n");
+        return -1;
+    }
 
-    return waitRes;
+    if (response.msg.data.action != PA_DATA_COL) {
+        printf("Wrong action response instead of PA_DATA_COL\n");
+        return -1;
+    }
+
+    return 0;
 }
 
 int work() {
@@ -194,8 +211,9 @@ int work() {
 
     while (simulationDays < configArr[SO_DAYS])
     {
-        if (analyzerFinished != 1) {
-            waitForAnalizerToFinish();
+        /* Salta il primo giorno */
+        if (simulationDays > 0) {
+            checkForAnalizerToFinish();
         }
 
         printf("Day number %d\n", simulationDays);
@@ -206,13 +224,11 @@ int work() {
             return -1;
         }
 
-        printf("Send SIGUR2...\nSending in group %d\n", getpid());
         killpg(getpid(), SIGUSR2);
 
         if (simulationDays < configArr[SO_DAYS]) {
 
             waitForAnalizerToCollectData();
-            analyzerFinished = 0;
 
             killpg(getpid(), SIGCONT);
         }

@@ -7,7 +7,9 @@ typedef enum {
     PA_SE_SUMMARY,  /* Sell good summary */
     PA_RQ_GOOD,     /* Request good */
     PA_RQ_SUMMARY,  /* Request good summary */
-    PA_EOT          /* End of trasmission */     
+    PA_EOT,         /* End of trasmission */ 
+    PA_DATA_COL,    /* Data collected from boats and ports */    
+    PA_FINISH       /* Analyzer finished analyzing data */
 } ProtocolActions;
 
 typedef struct {

@@ -1,6 +1,7 @@
 int initializeSingalsHandlers();
 int initializeConfig(char *configShareMemoryIdString);
-int initializeAnalyzer(char *goodAnalyzerShareMemoryIdString, char *boatAnalyzerShareMemoryIdString, char *portAnalyzerShareMemoryIdString);
+int initializeAnalyzer(char *goodAnalyzerShareMemoryIdString, 
+    char *boatAnalyzerShareMemoryIdString, char *portAnalyzerShareMemoryIdString, char *wmsgq, char *rmsgq);
 int createLogFile();
 int waitForNewDay();
 int work();

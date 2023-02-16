@@ -45,11 +45,10 @@ void handle_port_simulation_signals(int signal) {
         case SIGUSR2:
             dumpData();
             waitForNewDay();
+            newDay();
             break;
 
-        /* New day of simulation */
         case SIGCONT:
-            newDay();
             break;
 
         /* End of the simulation */

@@ -8,16 +8,21 @@
 #include <sys/shm.h>
 #include <errno.h>
 #include <string.h>
+#include <sys/msg.h>
 
 #include <linux/limits.h>
 
 #include "lib/analyzer.h"
+#include "lib/msgPortProtocol.h"
 
 int *configArr;
 
 int goodAnalyzerSharedMemoryId;
 int boatAnalyzerSharedMemoryId; 
 int portAnalyzerSharedMemoryId;
+
+int readingMsgQueue;
+int writingMsgQueue;
 
 char *logPath;
 
@@ -26,21 +31,17 @@ int simulationRunning = 1;
 
 void handle_analyzer_simulation_signals(int signal) {
 
+    /* TODO Masks? */
     switch (signal)
     {
         case SIGUSR1:
-            break;
-
-        /* Wait for the new day to come */
         case SIGUSR2:
-            printf("Analyzer recived SIGUSR2\n");
-            break;
-
         case SIGCONT:
             break;
 
         /* End of the simulation */
         case SIGSYS:
+            printf("F\n");
             simulationRunning = 0;
             break;
         default:
@@ -55,7 +56,7 @@ void handle_analyzer_stopProcess() {
     exit(0);
 }
 
-/* argv[0]=id | argv[1]=ganalizersh | argv[2]=banalyzersh | argv[3]=panalyzersh */
+/* argv[0]=id | argv[1]=ganalizersh | argv[2]=banalyzersh | argv[3]=panalyzersh | argv[4]=wmsgq | argv[5]=rmsgq */
 int main(int argx, char *argv[]) {
 
     (void) argx;
@@ -66,7 +67,7 @@ int main(int argx, char *argv[]) {
         exit(1);
     }
 
-    if (initializeAnalyzer(argv[1], argv[2], argv[3]) == -1) {
+    if (initializeAnalyzer(argv[1], argv[2], argv[3], argv[4], argv[5]) == -1) {
         printf("Initialization of analyzer failed\n");
         exit(2);
     }
@@ -96,8 +97,11 @@ int initializeSingalsHandlers() {
     signalAction.sa_flags = SA_RESTART;
     signalAction.sa_handler = &handle_analyzer_simulation_signals;
     sigaction(SIGUSR2, &signalAction, NULL);
+    
+    signalAction.sa_flags = SA_RESTART;
+    signalAction.sa_handler = &handle_analyzer_simulation_signals;
+    sigaction(SIGCONT, &signalAction, NULL);
 
-    signal(SIGCONT, handle_analyzer_simulation_signals);
     signal(SIGSYS, handle_analyzer_simulation_signals);
     signal(SIGINT, handle_analyzer_stopProcess);
 
@@ -118,13 +122,17 @@ int initializeConfig(char *configShareMemoryIdString) {
     return 0;
 }
 
-int initializeAnalyzer(char *goodAnalyzerShareMemoryIdString, char *boatAnalyzerShareMemoryIdString, char *portAnalyzerShareMemoryIdString) {
+int initializeAnalyzer(char *goodAnalyzerShareMemoryIdString, char *boatAnalyzerShareMemoryIdString, 
+    char *portAnalyzerShareMemoryIdString, char *wmsgq, char *rmsgq) {
 
     char *p;
 
     goodAnalyzerSharedMemoryId = strtol(goodAnalyzerShareMemoryIdString, &p, 10);
     boatAnalyzerSharedMemoryId = strtol(boatAnalyzerShareMemoryIdString, &p, 10);
     portAnalyzerSharedMemoryId = strtol(portAnalyzerShareMemoryIdString, &p, 10);
+
+    writingMsgQueue = strtol(wmsgq, &p, 10);
+    readingMsgQueue = strtol(rmsgq, &p, 10);
 
     createLogFile();
 
@@ -191,9 +199,7 @@ int work() {
 
     while (simulationRunning == 1)
     {
-        printf("Start analyzer waiting...\nListening in group %d\n", getpgrp());
         waitForNewDay();
-        printf("Finished analyzer waiting...\n");
 
         checkDataDump();
 
@@ -221,17 +227,20 @@ int work() {
             printf("Error while writing port report\n");
             return -1;
         }
-
+        
         currentDay++;
 
-        kill(getppid(), SIGALRM); 
+        if (sendMessage(writingMsgQueue, PA_FINISH, -1, -1) == -1) {
+            printf("Error during sendig of the PA_FINISH\n");
+            return -1;
+        }
     }
 
     if (fclose(filePointer) != 0) {
         printf("Error closing file: %s\n", strerror(errno));
         return -1;
     }
-    
+
     return 0;
 }
 
@@ -239,14 +248,17 @@ int checkDataDump() {
 
     /* Controlla che tutti abbiano scirtto */
 
-    kill(getppid(), SIGTTIN);  
+    if (sendMessage(writingMsgQueue, PA_DATA_COL, -1, -1) == -1) {
+        printf("Error during sendig of the PA_DATA_COL\n");
+        return -1;
+    }
 
     return 0;
 }
 
 int generateDailyHeader(FILE *filePointer) {
 
-    fprintf(filePointer, "\t\t=====================\t\t\\nDay: %d\n", currentDay);
+    fprintf(filePointer, "\t\t=====================\t\t\nDay: %d\n", currentDay);
 
     return 0;
 }
@@ -282,6 +294,16 @@ int cleanup() {
 
     if (shmctl(portAnalyzerSharedMemoryId, IPC_RMID, NULL) == -1) {
         printf("The port shared memory failed to be closed in analyzer\n");
+        return -1;
+    }
+
+    if (msgctl(writingMsgQueue, IPC_RMID, NULL) == -1) {
+        printf("The writing queue failed to be closed analyzer\n");
+        return -1;
+    }
+
+    if (msgctl(readingMsgQueue, IPC_RMID, NULL) == -1) {
+        printf("The reading queue failed to be closed analyzer\n");
         return -1;
     }
 
