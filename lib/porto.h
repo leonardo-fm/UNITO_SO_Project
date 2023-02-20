@@ -17,3 +17,4 @@ int handlePA_EOT();
 int generateShareMemory(int sizeOfSegment);
 int generateSemaphore(int semKey);
 int cleanup();
+void safeExit(int exitNumber);

@@ -48,11 +48,13 @@ void handle_port_simulation_signals(int signal) {
             newDay();
             break;
 
+        /* Need to handle the signal for the waitForNewDay() */
         case SIGCONT:
             break;
 
         /* End of the simulation */
         case SIGSYS:
+            dumpData();
             simulationRunning = 0;
             stopWaitingQueues = 1;
             break;
@@ -63,7 +65,7 @@ void handle_port_simulation_signals(int signal) {
 }
 
 void handle_port_stopProcess() {
-    printf("Stopping port...\n");
+
     cleanup();
     exit(0);
 }
@@ -77,22 +79,22 @@ int main(int argx, char *argv[]) {
 
     if (initializeConfig(argv[1], argv[4], argv[5]) == -1) {
         printf("Initialization of port config failed\n");
-        exit(1);
+        safeExit(1);
     }
 
     if (initializePort(argv[0], argv[2], argv[3]) == -1) {
         printf("Initialization of port %s failed\n", argv[0]);
-        exit(2);
+        safeExit(2);
     }
 
     if (work() == -1) {
         printf("Error during port %d work\n", port.id);
-        exit(3);
+        safeExit(3);
     }
 
     if (cleanup() == -1) {
         printf("Port cleanup failed\n");
-        exit(4);
+        safeExit(4);
     }
 
     return 0;
@@ -110,6 +112,10 @@ int initializeSingalsHandlers() {
     signalAction.sa_flags = SA_RESTART;
     signalAction.sa_handler = &handle_port_simulation_signals;
     sigaction(SIGUSR2, &signalAction, NULL);
+
+    signalAction.sa_flags = SA_RESTART;
+    signalAction.sa_handler = &handle_port_simulation_signals;
+    sigaction(SIGCONT, &signalAction, NULL);
 
     signal(SIGSYS, handle_port_simulation_signals);
     signal(SIGINT, handle_port_stopProcess);
@@ -616,6 +622,7 @@ int dumpData() {
         return -1;
     }
 
+    pdd.id = port.id;
     pdd.totalGoodInStock = totalGoodInStock;
     pdd.totalGoodRecived = totalDailyGoodsRecived;
     pdd.totalGoodSold = totalDailyGoodsSold;
@@ -647,7 +654,7 @@ int waitForNewDay() {
 
     sigaddset(&sigset, SIGCONT);
     waitRes = sigwait(&sigset, &sig);
-
+    
     return waitRes;
 }
 
@@ -776,6 +783,7 @@ int generateSemaphore(int semKey) {
 }
 
 int cleanup() {
+    printf("Port clean\n");
 
     if (shmdt(configArr) == -1) {
         printf("The conf arr detach failed\n");
@@ -798,4 +806,11 @@ int cleanup() {
     }
 
     return 0;
+}
+
+void safeExit(int exitNumber) {
+    cleanup();
+    printf("Program %s exit with error %d\n", __FILE__, exitNumber);
+    kill(getppid(), SIGINT);
+    exit(exitNumber);
 }

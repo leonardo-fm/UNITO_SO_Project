@@ -49,7 +49,27 @@ int loadConfig(int configShareMemoryId) {
         i++;
     }
 
+    if (checkConfigValues(arrConfig) == -1) {
+        printf("Check config failed\n");
+        return -1;
+    }
+
     fclose(filePointer);
     
+    return 0;
+}
+
+int checkConfigValues(int *arrConfig) {
+    
+    if(arrConfig[SO_NAVI] < 1) {
+        printf("SO_NAVI must be >= 1\n");
+        return -1;
+    }   
+
+    if(arrConfig[SO_PORTI] < 4) {
+        printf("SO_PORTI must be >= 4\n");
+        return -1;
+    }
+
     return 0;
 }

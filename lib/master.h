@@ -6,3 +6,4 @@ int initializeGoods(int goodShareMemoryId);
 int generateGoods(int goodShareMemoryId);
 int generateSemaphore();
 int cleanup();
+void safeExit(int exitNumber);

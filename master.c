@@ -25,8 +25,8 @@ int goodAnalyzerShareMemoryId;
 int boatAnalyzerShareMemoryId;
 int portAnalyzerShareMemoryId;
 
-int readingMsgQueue;
-int writingMsgQueue;
+int analyzerReadingMsgQueue;
+int analyzerWritingMsgQueue;
 
 int NUM_OF_SETTINGS = 13;
 int *configArr;
@@ -52,51 +52,51 @@ int main() {
     configShareMemoryId = generateShareMemory(sizeof(int) * NUM_OF_SETTINGS);
     if (configShareMemoryId == -1) {
         printf("Error during creation of shared memory for config\n");
-        exit(1);
+        safeExit(1);
     }
 
     configArr = (int*) shmat(configShareMemoryId, NULL, 0);
     if (configArr == (void*) -1) {
-        exit(2);
+        safeExit(2);
     }
 
     initializeEnvironment();
     initializeSingalsHandlers();
     if (loadConfig(configShareMemoryId) == -1) {
-        exit(3);
+        safeExit(3);
     }
 
     /* ----- ANALYZER ----- */
-    readingMsgQueue = msgget(IPC_PRIVATE, IPC_CREAT | 0600);
-    writingMsgQueue = msgget(IPC_PRIVATE, IPC_CREAT | 0600);
+    analyzerReadingMsgQueue = msgget(IPC_PRIVATE, IPC_CREAT | 0600);
+    analyzerWritingMsgQueue = msgget(IPC_PRIVATE, IPC_CREAT | 0600);
 
     goodAnalyzerShareMemoryId = generateShareMemory(
         sizeof(goodDailyDump) * configArr[SO_MERCI] * (configArr[SO_NAVI] + configArr[SO_PORTI]));
     if (goodAnalyzerShareMemoryId == -1) {
         printf("Error during creation of shared memory for good analyzer\n");
-        exit(4);
+        safeExit(4);
     }
 
     boatAnalyzerShareMemoryId = generateShareMemory(sizeof(boatDailyDump) * configArr[SO_NAVI]);
     if (boatAnalyzerShareMemoryId == -1) {
         printf("Error during creation of shared memory for boat analyzer\n");
-        exit(5);
+        safeExit(5);
     }
 
     portAnalyzerShareMemoryId = generateShareMemory(sizeof(portDailyDump) * configArr[SO_PORTI]);
     if (portAnalyzerShareMemoryId == -1) {
         printf("Error during creation of shared memory for port analyzer\n");
-        exit(6);
+        safeExit(6);
     }
 
     analyzerArgs[0] = configShareMemoryId;
     analyzerArgs[1] = goodAnalyzerShareMemoryId;
     analyzerArgs[2] = boatAnalyzerShareMemoryId;
     analyzerArgs[3] = portAnalyzerShareMemoryId;
-    analyzerArgs[4] = readingMsgQueue;
-    analyzerArgs[5] = writingMsgQueue;
+    analyzerArgs[4] = analyzerReadingMsgQueue;
+    analyzerArgs[5] = analyzerWritingMsgQueue;
     if (generateSubProcesses(1, "./bin/analyzer", 0, analyzerArgs, 6) == -1) {
-        exit(7);
+        safeExit(7);
     }
 
 
@@ -104,11 +104,11 @@ int main() {
     goodShareMemoryId = generateShareMemory(sizeof(Goods) * configArr[SO_MERCI]);
     if (goodShareMemoryId == -1) {
         printf("Error during creation of shared memory for goods\n");
-        exit(8);
+        safeExit(8);
     }
 
     if (initializeGoods(goodShareMemoryId) == -1) {
-        exit(9);
+        safeExit(9);
     }
 
 
@@ -116,7 +116,7 @@ int main() {
     portShareMemoryId = generateShareMemory(sizeof(Port) * configArr[SO_PORTI]);
     if (portShareMemoryId == -1) {
         printf("Error during creation of shared memory for ports\n");
-        exit(10);
+        safeExit(10);
     }
 
     portArgs[0] = configShareMemoryId;
@@ -125,7 +125,7 @@ int main() {
     portArgs[3] = goodAnalyzerShareMemoryId;
     portArgs[4] = portAnalyzerShareMemoryId;
     if (generateSubProcesses(configArr[SO_PORTI], "./bin/porto", 1, portArgs, 5) == -1) {
-        exit(11);
+        safeExit(11);
     }
 
 
@@ -135,7 +135,7 @@ int main() {
     boatArgs[2] = goodAnalyzerShareMemoryId;
     boatArgs[3] = boatAnalyzerShareMemoryId;
     if (generateSubProcesses(configArr[SO_NAVI], "./bin/nave", 1, boatArgs, 4) == -1) {
-        exit(12);
+        safeExit(12);
     }
 
     /* TODO removit */
@@ -144,12 +144,12 @@ int main() {
     /* ----- START SIMULATION ----- */
     if (work() == -1) {
         printf("Error during master work\n");
-        exit(13);
+        safeExit(13);
     }
 
     if (cleanup() == -1) {
         printf("Cleanup failed\n");
-        exit(14);
+        safeExit(14);
     }
 
     return 0;
@@ -168,14 +168,14 @@ int checkForAnalizerToFinish() {
 
     PortMessage response;
 
-    int msgResponse = receiveMessage(readingMsgQueue, &response, 0, 0);
+    int msgResponse = receiveMessage(analyzerReadingMsgQueue, &response, 0, 0);
     if (msgResponse == -1) {
         printf("Error during waiting response from PA_FINISH\n");
         return -1;
     }
 
     if (response.msg.data.action != PA_FINISH) {
-        printf("Wrong action response instead of PA_FINISH\n");
+        printf("Wrong action response instead of PA_FINISH, get %d\n", response.msg.data.action);
         return -1;
     }
 
@@ -186,14 +186,14 @@ int waitForAnalizerToCollectData() {
 
     PortMessage response;
 
-    int msgResponse = receiveMessage(readingMsgQueue, &response, 0, 0);
+    int msgResponse = receiveMessage(analyzerReadingMsgQueue, &response, 0, 0);
     if (msgResponse == -1) {
         printf("Error during waiting response from PA_DATA_COL\n");
         return -1;
     }
 
     if (response.msg.data.action != PA_DATA_COL) {
-        printf("Wrong action response instead of PA_DATA_COL\n");
+        printf("Wrong action response instead of PA_DATA_COL, get %d\n", response.msg.data.action);
         return -1;
     }
 
@@ -224,9 +224,14 @@ int work() {
             return -1;
         }
 
-        killpg(getpid(), SIGUSR2);
-
         if (simulationDays < configArr[SO_DAYS]) {
+
+            killpg(getpid(), SIGUSR2);
+
+            if (sendMessage(analyzerWritingMsgQueue, PA_NEW_DAY, -1, -1) == -1) {
+                printf("Error during sendig of the PA_NEW_DAY\n");
+                return -1;
+            }
 
             waitForAnalizerToCollectData();
 
@@ -235,6 +240,12 @@ int work() {
     }
 
     killpg(getpid(), SIGSYS); /*Si svegliano? essendo che i porti e navi stano aspettando un SIGCONT*/
+
+    if (sendMessage(analyzerWritingMsgQueue, PA_NEW_DAY, -1, -1) == -1) {
+        printf("Error during sendig of the PA_NEW_DAY finish\n");
+        return -1;
+    }
+
     printf("Simulation finished\n");
 
     return 0;
@@ -389,6 +400,12 @@ int generateSemaphore() {
 }
 
 int cleanup() {
+    printf("Master clean\n");
+
+    if (shmdt(configArr) == -1) {
+        printf("The config detach failed\n");
+        return -1;
+    }
 
     if (shmctl(configShareMemoryId, IPC_RMID, NULL) == -1) {
         printf("The shared memory failed to be closed\n");
@@ -406,4 +423,11 @@ int cleanup() {
     }
 
     return 0;
+}
+
+void safeExit(int exitNumber) {
+    cleanup();
+    printf("Program %s exit with error %d\n", __FILE__, exitNumber);
+    killpg(getpid(), SIGINT);
+    exit(exitNumber);
 }

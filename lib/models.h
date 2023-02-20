@@ -83,10 +83,12 @@ typedef struct {
 } goodDailyDump;
 
 typedef struct {
+    int id;
     BoatState boatState;
 } boatDailyDump;
 
 typedef struct {
+    int id;
     int totalGoodInStock;
     int totalGoodSold;
     int totalGoodRecived;

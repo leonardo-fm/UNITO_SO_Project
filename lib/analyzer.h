@@ -11,3 +11,4 @@ int generateDailyGoodReport(FILE *filePointer);
 int generateDailyBoatReport(FILE *filePointer);
 int generateDailyPortReport(FILE *filePointer);
 int cleanup();
+void safeExit(int exitNumber);

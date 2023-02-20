@@ -59,6 +59,7 @@ void handle_boat_simulation_signals(int signal) {
 
         /* End of the simulation */
         case SIGSYS:
+            dumpData();
             simulationRunning = 0;
             break;
         default:
@@ -82,22 +83,22 @@ int main(int argx, char *argv[]) {
 
     if (initializeConfig(argv[1], argv[3], argv[4]) == -1) {
         printf("Initialization of boat config failed\n");
-        exit(1);
+        safeExit(1);
     }
 
     if (initializeBoat(argv[0], argv[2]) == -1) {
         printf("Initialization of boat %s failed\n", argv[0]);
-        exit(2);
+        safeExit(2);
     }
 
     if (work() == -1) {
         printf("Error during boat %d work\n", boat.id);
-        exit(3);
+        safeExit(3);
     }
 
     if (cleanup() == -1) {
         printf("Boat cleanup failed\n");
-        exit(4);
+        safeExit(4);
     }
 
     return 0;
@@ -200,6 +201,7 @@ int work() {
             }
 
             boat.state = In_Port_Exchange;
+
             tradeStatus = openTrade();
             if (tradeStatus == -1) {
                 printf("Error during trade\n");
@@ -278,6 +280,7 @@ int dumpData() {
         return -1;
     }
 
+    bdd.id = boat.id;
     bdd.boatState = boat.state;
     boatArr[boatReferenceId] = bdd;
 
@@ -349,6 +352,16 @@ int gotoPort() {
     }
 
     waitTimeNs = getNanoSeconds(distance / configArr[SO_SPEED]);
+
+    printf("Boat position x = %d, y = %d\n", boat.position.x, boat.position.y);
+    printf("Port position x = %d, y = %d\n", portArr[currentPort].position.x, portArr[currentPort].position.y);
+    printf("Wait ns(%d / %d) = %d\n", distance, configArr[SO_SPEED], waitTimeNs);
+
+    if (shmdt(portArr) == -1) {
+        printf("The port array detach failed\n");
+        return -1;
+    }
+
     if (safeWait(0, waitTimeNs) == -1) {
         printf("Error while waiting to go to in a port\n");
         return -1;
@@ -813,6 +826,7 @@ int getSpaceAvailableInTheHold() {
 }
 
 int cleanup() {
+    printf("Boat clean\n");
 
     if (shmdt(configArr) == -1) {
         printf("The config detach failed\n");
@@ -820,4 +834,11 @@ int cleanup() {
     }
 
     return 0;
+}
+
+void safeExit(int exitNumber) {
+    cleanup();
+    printf("Program %s exit with error %d\n", __FILE__, exitNumber);
+    kill(getppid(), SIGINT);
+    exit(exitNumber);
 }
