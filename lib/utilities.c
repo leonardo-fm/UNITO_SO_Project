@@ -59,6 +59,12 @@ int getRandomValue(int min, int max) {
     return (rand() / (RAND_MAX / (max - (min - 1)))) + min;
 }
 
+int getSeconds(double timeInSeconds) {
+    double d, f;
+    modf(timeInSeconds, &d);
+    return d;
+}
+
 long getNanoSeconds(double timeInSeconds) {
     double d, f;
     f = modf(timeInSeconds, &d);

@@ -223,10 +223,13 @@ int work() {
             printf("Error while waiting next day master\n");
             return -1;
         }
-
+        
         if (simulationDays < configArr[SO_DAYS]) {
 
-            killpg(getpid(), SIGUSR2);
+            if (killpg(getpid(), SIGUSR2) == -1) {
+                printf("Error while sending SIGUSR2, errno: %d\n", errno);
+                return -1;
+            }
 
             if (sendMessage(analyzerWritingMsgQueue, PA_NEW_DAY, -1, -1) == -1) {
                 printf("Error during sendig of the PA_NEW_DAY\n");

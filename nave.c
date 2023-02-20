@@ -176,7 +176,7 @@ int initializeBoat(char *boatIdS, char *portShareMemoryIdS) {
 }
 
 int work() {
-
+printf("Listening on group: %d\n", getpgrp());
     /* wait for simulation to start */
     if (waitForStart() != 0) {
         printf("Error while waiting for start\n");
@@ -248,7 +248,7 @@ int dumpData() {
     }
 
     for (i = 0; i < configArr[SO_MERCI]; i++) {
-        
+
         gdd.goodId = i;
         if (goodHold[i].state == Expired_In_The_Boat) {
             gdd.Good_Expired_In_The_Boat = goodHold[i].loadInTon;
@@ -323,8 +323,9 @@ int gotoPort() {
 
     int newPortFound = 0;
     Port *portArr;
-    double num, distance;
+    double distance, kmPerDay;
     long waitTimeNs;
+    int waitTimeS;
 
     portArr = (Port*) shmat(portSharedMemoryId, NULL, 0);
     if (portArr == (void*) -1) {
@@ -342,27 +343,19 @@ int gotoPort() {
         }
     }
 
-    num = (double)(((portArr[currentPort].position.x - boat.position.x) * (portArr[currentPort].position.x - boat.position.x))) 
-        + (double)(((portArr[currentPort].position.y - boat.position.y) * (portArr[currentPort].position.y - boat.position.y)));
-    distance = sqrt(num);
-
+    distance = sqrt(pow(portArr[currentPort].position.x - boat.position.x, 2) 
+                    + pow(portArr[currentPort].position.y - boat.position.y, 2));
+    
     if (shmdt(portArr) == -1) {
         printf("The arr port coordinates detach failed\n");
         return -1;
     }
 
-    waitTimeNs = getNanoSeconds(distance / configArr[SO_SPEED]);
+    kmPerDay = distance / configArr[SO_SPEED];
+    waitTimeNs = getNanoSeconds(kmPerDay);
+    waitTimeS = getSeconds(kmPerDay);
 
-    printf("Boat position x = %d, y = %d\n", boat.position.x, boat.position.y);
-    printf("Port position x = %d, y = %d\n", portArr[currentPort].position.x, portArr[currentPort].position.y);
-    printf("Wait ns(%d / %d) = %d\n", distance, configArr[SO_SPEED], waitTimeNs);
-
-    if (shmdt(portArr) == -1) {
-        printf("The port array detach failed\n");
-        return -1;
-    }
-
-    if (safeWait(0, waitTimeNs) == -1) {
+    if (safeWait(waitTimeS, waitTimeNs) == -1) {
         printf("Error while waiting to go to in a port\n");
         return -1;
     }
@@ -621,7 +614,9 @@ int sellGoods() {
         if (goodHold[i].loadInTon > 0 && goodHold[i].state != Expired_In_The_Boat) {
             
             int exchange = 0;
+            double loadTonPerDay;
             long waitTimeNs;
+            int waitTimeS;
 
             if (goodArr[i].loadInTon == 0) {
                 continue;
@@ -652,8 +647,11 @@ int sellGoods() {
 
             sem_post(semaphore);
 
-            waitTimeNs = getNanoSeconds(exchange / configArr[SO_LOADSPEED]);
-            if (safeWait(0, waitTimeNs) == -1) {
+            loadTonPerDay = exchange / configArr[SO_LOADSPEED];
+            waitTimeNs = getNanoSeconds(loadTonPerDay);
+            waitTimeS = getSeconds(loadTonPerDay);
+
+            if (safeWait(waitTimeS, waitTimeNs) == -1) {
                 printf("Error while waiting to exchange\n");
                 return -1;
             }

@@ -4,6 +4,7 @@ int initializeAnalyzer(char *goodAnalyzerShareMemoryIdString,
     char *boatAnalyzerShareMemoryIdString, char *portAnalyzerShareMemoryIdString, char *wmsgq, char *rmsgq);
 int createLogFile();
 int waitForNewDay();
+int waitForStart();
 int work();
 int checkDataDump();
 int generateDailyHeader(FILE *filePointer);

@@ -201,9 +201,27 @@ int waitForNewDay() {
     return 0;
 }
 
+int waitForStart() {
+
+    int sig, waitRes;
+    sigset_t sigset;
+
+    sigaddset(&sigset, SIGUSR1);
+    waitRes = sigwait(&sigset, &sig);
+
+    return waitRes;
+}
+
 int work() {
 
     FILE *filePointer = fopen(logPath, "a");
+
+    /* wait for simulation to start */
+    if (waitForStart() != 0) {
+        printf("Error while waiting for start\n");
+        return -1;
+    }
+    printf("*** a start\n");
 
     while (simulationRunning == 1)
     {
@@ -301,6 +319,7 @@ int checkDataDump() {
         /* Check goods data */
         for (i = 0; i < goodArrayLength; i++)
         {
+            printf("%d per %d = %d, good id = %d, entoty id = %d\n", i, goodSize, i % goodSize, goodArr[i].goodId, i / goodSize);
             /* Check if all goodId != 0 are set and not equal to 0 */
             if (i % goodSize != 0 && goodArr[i].goodId == 0) {
                 printf("Failed good check\n");
