@@ -176,7 +176,7 @@ int initializeBoat(char *boatIdS, char *portShareMemoryIdS) {
 }
 
 int work() {
-printf("Listening on group: %d\n", getpgrp());
+
     /* wait for simulation to start */
     if (waitForStart() != 0) {
         printf("Error while waiting for start\n");

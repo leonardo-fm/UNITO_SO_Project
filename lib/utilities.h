@@ -1,5 +1,7 @@
 #include "models.h"
 
+#define debug(S) (printf("%s line: %d, message: %s\n", __FILE__, __LINE__, S))
+
 void initializeEnvironment();
 
 Coordinates getRandomCoordinates(double maxX, double maxY);

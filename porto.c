@@ -43,7 +43,6 @@ void handle_port_simulation_signals(int signal) {
 
         /* Wait for the new day to come */
         case SIGUSR2:
-        printf("OK\n");
             dumpData();
             waitForNewDay();
             newDay();
@@ -327,7 +326,7 @@ int initializePortGoods(char *goodShareMemoryIdS) {
         return -1;
     }
 
-    maxTake = (configArr[SO_FILL] / 2) / ((configArr[SO_MERCI] / 2) - 1) / configArr[SO_PORTI];
+    maxTake = (configArr[SO_FILL] / 2) / configArr[SO_MERCI] / configArr[SO_PORTI];
 
     sem_wait(semaphore);
 
@@ -397,14 +396,12 @@ int work() {
 
     int maxQauys, i, j;
     int *queues[2];
-        printf("*** Start port waiting\n");
 
     /* wait for simulation to start */
     if (waitForStart() != 0) {
         printf("Error while waiting for start\n");
         return -1;
     }
-    printf("*** Start port job\n");
 
     /* queue[0][n] read queue | queue[1][n] write queue */
     maxQauys = port.availableQuays;

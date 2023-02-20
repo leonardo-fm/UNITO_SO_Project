@@ -42,7 +42,6 @@ void handle_analyzer_simulation_signals(int signal) {
 
         /* End of the simulation */
         case SIGSYS:
-        printf("Finish sim analyzer\n");
             simulationRunning = 0;
             break;
         default:
@@ -221,7 +220,6 @@ int work() {
         printf("Error while waiting for start\n");
         return -1;
     }
-    printf("*** a start\n");
 
     while (simulationRunning == 1)
     {
@@ -308,7 +306,6 @@ int checkDataDump() {
     do
     {
         long waitTimeInNs = getNanoSeconds(waitTimeInSeconds);
-        printf("Wait time in analyzer in Ns = %d\n", waitTimeInNs);
         if (safeWait(0, waitTimeInNs) == -1) {
             printf("Error while waiting dump data in analyzer\n");
             return -1;
@@ -319,7 +316,6 @@ int checkDataDump() {
         /* Check goods data */
         for (i = 0; i < goodArrayLength; i++)
         {
-            printf("%d per %d = %d, good id = %d, entoty id = %d\n", i, goodSize, i % goodSize, goodArr[i].goodId, i / goodSize);
             /* Check if all goodId != 0 are set and not equal to 0 */
             if (i % goodSize != 0 && goodArr[i].goodId == 0) {
                 printf("Failed good check\n");
