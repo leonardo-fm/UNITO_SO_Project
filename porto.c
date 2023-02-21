@@ -70,7 +70,7 @@ void handle_port_stopProcess() {
     exit(0);
 }
 
-/* argv[0]=id | argv[1]=configsh | argv[2]=portsh | argv[3]=goodsh | argv[4]=ganalizersh | argv[5]=pc analyzersh */
+/* argv[0]=id | argv[1]=configsh | argv[2]=portsh | argv[3]=goodsh | argv[4]=ganalizersh | argv[5]=pc analyzersh | argv[6]=akish */
 int main(int argx, char *argv[]) {
 
     (void) argx;
@@ -82,7 +82,7 @@ int main(int argx, char *argv[]) {
         safeExit(1);
     }
 
-    if (initializePort(argv[0], argv[2], argv[3]) == -1) {
+    if (initializePort(argv[0], argv[2], argv[3], argv[6]) == -1) {
         handleError("Initialization of port failed");
         safeExit(2);
     }
@@ -141,7 +141,11 @@ int initializeConfig(char *configShareMemoryIdString, char *goodAnalyzerShareMem
     return 0;
 }
 
-int initializePort(char *portIdString, char *portShareMemoryIdS, char *goodShareMemoryIdS) {
+int initializePort(char *portIdString, char *portShareMemoryIdS, char *goodShareMemoryIdS, char *acknowledgeInitShareMemoryIdS) {
+    
+    int acknowledgeInitShareMemoryId;
+    char *p;
+    int *acknowledgeArr;
 
     if (initializePortStruct(portIdString, portShareMemoryIdS) == -1) {
         handleError("Error occurred during init of port struct");
@@ -155,6 +159,20 @@ int initializePort(char *portIdString, char *portShareMemoryIdS, char *goodShare
 
     if (initializePortGoods(goodShareMemoryIdS) == -1) {
         handleError("Error occurred during init of goods");
+        return -1;
+    }
+
+    acknowledgeInitShareMemoryId = strtol(acknowledgeInitShareMemoryIdS, &p, 10);
+    acknowledgeArr = (int*) shmat(acknowledgeInitShareMemoryId, NULL, 0);
+    if (acknowledgeArr == (void*) -1) {
+        handleErrno("shmat()");
+        return -1;
+    }
+
+    acknowledgeArr[port.id] = 1;
+
+    if (shmdt(acknowledgeArr) == -1) {
+        handleErrno("shmdt()");
         return -1;
     }
 

@@ -1,8 +1,8 @@
 #!/bin/bash
 
-#killall -9 nave
-#killall -9 porto
-#killall -9 analyzer
+killall -9 nave
+killall -9 porto
+killall -9 analyzer
 
 ME=lo
 

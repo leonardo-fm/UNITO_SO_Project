@@ -74,7 +74,7 @@ void handle_boat_stopProcess() {
     exit(0);
 }
 
-/* argv[0]=id | argv[1]=configsh | argv[2]=portsh | argv[3]=ganalizersh | argv[4]=banalyzersh */
+/* argv[0]=id | argv[1]=configsh | argv[2]=portsh | argv[3]=ganalizersh | argv[4]=banalyzersh | argv[5]=akish */
 int main(int argx, char *argv[]) {
 
     (void) argx;
@@ -85,8 +85,8 @@ int main(int argx, char *argv[]) {
         handleError("Initialization of boat config failed");
         safeExit(1);
     }
-
-    if (initializeBoat(argv[0], argv[2]) == -1) {
+    
+    if (initializeBoat(argv[0], argv[2], argv[5]) == -1) {
         handleError("Initialization of boat failed");
         safeExit(2);
     }
@@ -144,10 +144,13 @@ int initializeConfig(char *configShareMemoryIdString, char *goodAnalyzerShareMem
     return 0;
 }
 
-int initializeBoat(char *boatIdS, char *portShareMemoryIdS) {
+int initializeBoat(char *boatIdS, char *portShareMemoryIdS, char *acknowledgeInitShareMemoryIdS) {
 
     int i = 0;
     char *p;
+    int acknowledgeInitShareMemoryId;
+    int *acknowledgeArr;
+
     boat.id = strtol(boatIdS, &p, 10);
     boat.position = getRandomCoordinates(configArr[SO_LATO], configArr[SO_LATO]);
     boat.capacityInTon = configArr[S0_CAPACITY];
@@ -172,6 +175,20 @@ int initializeBoat(char *boatIdS, char *portShareMemoryIdS) {
         goodHold[i] = emptyGood;
     }
     
+    acknowledgeInitShareMemoryId = strtol(acknowledgeInitShareMemoryIdS, &p, 10);
+    acknowledgeArr = (int*) shmat(acknowledgeInitShareMemoryId, NULL, 0);
+    if (acknowledgeArr == (void*) -1) {
+        handleErrno("shmat()");
+        return -1;
+    }
+
+    acknowledgeArr[boat.id] = 1;
+
+    if (shmdt(acknowledgeArr) == -1) {
+        handleErrno("shmdt()");
+        return -1;
+    }
+
     return 0;
 }
 

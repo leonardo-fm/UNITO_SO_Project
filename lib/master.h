@@ -1,4 +1,5 @@
 int initializeSingalsHandlers();
+int waitForInitializationOfChildren();
 int work();
 int generateShareMemory(int sizeOfSegment);
 int generateSubProcesses(int nOfProcess, char *execFilePath, int includeProceduralId, int *arguments, int argSize);

@@ -22,6 +22,7 @@ int goodShareMemoryId;
 int portShareMemoryId;
 
 int goodAnalyzerShareMemoryId;
+int acknowledgeInitShareMemoryId;
 int boatAnalyzerShareMemoryId;
 int portAnalyzerShareMemoryId;
 
@@ -43,8 +44,8 @@ void handle_master_stopProcess() {
 int main() {
 
     int analyzerArgs[6];
-    int portArgs[5];
-    int boatArgs[4];
+    int portArgs[6];
+    int boatArgs[5];
 
     setpgid(getpid(), getpid());
 
@@ -107,10 +108,17 @@ int main() {
     }
 
 
+    /* ----- BOTH ----- */
+    acknowledgeInitShareMemoryId = generateShareMemory(sizeof(int) * (configArr[SO_NAVI] + configArr[SO_PORTI]));
+    if (acknowledgeInitShareMemoryId == -1) {
+        safeExit(10);
+    }
+
+
     /* ----- PORTS ----- */
     portShareMemoryId = generateShareMemory(sizeof(Port) * configArr[SO_PORTI]);
     if (portShareMemoryId == -1) {
-        safeExit(10);
+        safeExit(11);
     }
 
     portArgs[0] = configShareMemoryId;
@@ -118,8 +126,9 @@ int main() {
     portArgs[2] = goodShareMemoryId;
     portArgs[3] = goodAnalyzerShareMemoryId;
     portArgs[4] = portAnalyzerShareMemoryId;
-    if (generateSubProcesses(configArr[SO_PORTI], "./bin/porto", 1, portArgs, 5) == -1) {
-        safeExit(11);
+    portArgs[5] = acknowledgeInitShareMemoryId;
+    if (generateSubProcesses(configArr[SO_PORTI], "./bin/porto", 1, portArgs, 6) == -1) {
+        safeExit(12);
     }
 
 
@@ -128,20 +137,26 @@ int main() {
     boatArgs[1] = portShareMemoryId;
     boatArgs[2] = goodAnalyzerShareMemoryId;
     boatArgs[3] = boatAnalyzerShareMemoryId;
-    if (generateSubProcesses(configArr[SO_NAVI], "./bin/nave", 1, boatArgs, 4) == -1) {
-        safeExit(12);
-    }
-
-    /* TODO removit */
-    sleep(1);
-
-    /* ----- START SIMULATION ----- */
-    if (work() == -1) {
+    boatArgs[4] = acknowledgeInitShareMemoryId;
+    if (generateSubProcesses(configArr[SO_NAVI], "./bin/nave", 1, boatArgs, 5) == -1) {
         safeExit(13);
     }
 
-    if (cleanup() == -1) {
+
+    /* ----- CHECK INIT ----- */
+    if (waitForInitializationOfChildren() == -1) {
+        handleError("Error while waiting for children to be initialized");
         safeExit(14);
+    }
+
+
+    /* ----- START SIMULATION ----- */
+    if (work() == -1) {
+        safeExit(15);
+    }
+
+    if (cleanup() == -1) {
+        safeExit(16);
     }
 
     return 0;
@@ -192,6 +207,55 @@ int waitForAnalizerToCollectData() {
     return 0;
 }
 
+int waitForInitializationOfChildren() {
+
+    double waitTimeInSeconds = 0.005;
+    int allChildrenInit, i;
+    int *acknowledgeArr;
+    int acknowledgeArrLength = configArr[SO_NAVI] + configArr[SO_PORTI];
+
+    acknowledgeArr = (int*) shmat(acknowledgeInitShareMemoryId, NULL, 0);
+    if (acknowledgeArr == (void*) -1) {
+        handleErrno("shmat()");
+        return -1;
+    }
+
+    do
+    {
+        long waitTimeInNs = getNanoSeconds(waitTimeInSeconds);
+        if (safeWait(0, waitTimeInNs) == -1) {
+            handleError("Error while waiting init children");
+            return -1;
+        }
+
+        allChildrenInit = 1;
+
+        for (i = 0; i < acknowledgeArrLength; i++)
+        {
+            if (acknowledgeArr[i] == 0) {
+                debug("Failed init check");
+                allChildrenInit = 0;
+                break;
+            }
+        }
+
+        waitTimeInSeconds += waitTimeInSeconds;
+
+        if (waitTimeInSeconds > 1) {
+            handleError("Wait time for init check exeaded 1 second");
+            return -1;
+        }
+
+    } while (allChildrenInit != 1);
+
+    if (shmctl(acknowledgeInitShareMemoryId, IPC_RMID, NULL) == -1) {
+        handleErrno("shmctl()");
+        return -1;
+    }
+
+    return 0;
+}
+
 int work() {
 
     int simulationDays = 0;
@@ -203,12 +267,16 @@ int work() {
 
     while (simulationDays < configArr[SO_DAYS])
     {
+        char buffer[128];
+
         /* Salta il primo giorno */
         if (simulationDays > 0) {
             checkForAnalizerToFinish();
         }
 
-        printf("Day number %d\n", simulationDays);
+        snprintf(buffer, sizeof(buffer), "Day number %d", simulationDays);
+        printConsole(buffer);
+
         simulationDays++;
 
         if (safeWait(1, 0l) == -1) {
@@ -234,22 +302,37 @@ int work() {
         }
     }
 
-    killpg(getpid(), SIGSYS); /*Si svegliano? essendo che i porti e navi stano aspettando un SIGCONT*/
+    killpg(getpid(), SIGSYS);
 
     if (sendMessage(analyzerWritingMsgQueue, PA_NEW_DAY, -1, -1) == -1) {
         handleError("Error during sendig of the PA_NEW_DAY finish");
         return -1;
     }
 
-    printf("Simulation finished\n");
+    printConsole("Simulation finished");
 
     return 0;
 }
 
 int generateShareMemory(int sizeOfSegment) {
+    
+    int *sharedMemory;
     int shareMemoryId = shmget(IPC_PRIVATE, sizeOfSegment, 0600);
     if (shareMemoryId == -1) {
         handleErrno("shmget()");
+        return -1;
+    }
+
+    sharedMemory = (int*) shmat(shareMemoryId, NULL, 0);
+    if (sharedMemory == (void*) -1) {
+        handleErrno("shmat()");
+        return -1;
+    }
+
+    memset(sharedMemory, 0, sizeOfSegment);
+
+    if (shmdt(sharedMemory) == -1) {
+        handleErrno("shmdt()");
         return -1;
     }
 
