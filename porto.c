@@ -300,7 +300,7 @@ int initializePortGoods(char *goodShareMemoryIdS) {
     char semaphoreKey[12];
     sem_t *semaphore;
 
-    int i, j, shareMemoryId, maxTake;
+    int i, j, shareMemoryId, maxTake, goodsToTakeArrLength;
     int *goodsToTake;
 
     char *p;
@@ -318,7 +318,8 @@ int initializePortGoods(char *goodShareMemoryIdS) {
     }
 
     /* Generate an array of random number with no repetitions */
-    goodsToTake = (int*) malloc(sizeof(int) * configArr[SO_MERCI]);
+    goodsToTakeArrLength = configArr[SO_MERCI] / 2;
+    goodsToTake = (int*) malloc(sizeof(int) * goodsToTakeArrLength);
 
     for (i = 0; i < configArr[SO_MERCI] - 1; i++) {
 
@@ -328,7 +329,7 @@ int initializePortGoods(char *goodShareMemoryIdS) {
         while (flag == 1) {
             flag = 0;
             randomValue = getRandomValue(0, (configArr[SO_MERCI] - 1));
-            for (j = 0; j < configArr[SO_MERCI]; j++) {
+            for (j = 0; j < goodsToTakeArrLength; j++) {
                 if (goodsToTake[j] == randomValue) {
                     flag = 1;
                     break;
@@ -337,6 +338,7 @@ int initializePortGoods(char *goodShareMemoryIdS) {
         }
 
         goodsToTake[i] = randomValue;
+        printf("CPG[%d]: %d\n", i, goodsToTake[i]);
     }
 
     shareMemoryId = strtol(goodShareMemoryIdS, &p, 10);
@@ -362,8 +364,10 @@ int initializePortGoods(char *goodShareMemoryIdS) {
         return -1;
     }
 
-    for (i = 0; i < configArr[SO_MERCI]; i++) {
+    for (i = 0; i < goodsToTakeArrLength; i++) {
+        
         int currentGood = goodsToTake[i];
+        printf("CG: %d\n", currentGood);
 
         /* Set life span */
         arrStock[currentGood].remaningDays = arrGood[currentGood].remaningDays;
@@ -714,8 +718,9 @@ int handlePA_ACCEPT(int queueId) {
             handleError("Error during send ACCEPT");
             return -1;
         }
-        
+
         port.availableQuays--;
+
     } else {
         if (sendMessage(queueId, PA_N, -1, -1) == -1) {
             handleError("Error during send ACCEPT");

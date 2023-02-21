@@ -451,6 +451,8 @@ int openTrade() {
             return -1;
         }
 
+        currentMsgQueueId = -1;
+
         return 1;
     }
     
@@ -465,7 +467,7 @@ int openTrade() {
 int trade() {
 
     if (haveIGoodsToSell() == 0 && simulationRunning == 1) {
-        
+
         if (sellGoods() == -1) {
             handleError("Error during selling goods");
             return -1;
@@ -630,11 +632,10 @@ int sellGoods() {
     totalGoodSold = 0;
     for (i = 0; i < configArr[SO_MERCI]; i++) {
         if (goodHold[i].loadInTon > 0 && goodHold[i].state != Expired_In_The_Boat) {
-            
+
             int exchange = 0;
             double loadTonPerDay;
-            long waitTimeNs;
-            int waitTimeS;
+            long waitTimeS, waitTimeNs;
 
             if (goodArr[i].loadInTon == 0) {
                 continue;
@@ -666,7 +667,7 @@ int sellGoods() {
 
             sem_post(semaphore);
 
-            loadTonPerDay = exchange / configArr[SO_LOADSPEED];
+            loadTonPerDay = (double) exchange / configArr[SO_LOADSPEED];
             waitTimeNs = getNanoSeconds(loadTonPerDay);
             waitTimeS = getSeconds(loadTonPerDay);
 
@@ -700,7 +701,7 @@ int sellGoods() {
 
 int buyGoods() {
 
-    int waitResponse, i, totalGoodRequested;
+    int waitResponse, i, totalGoodRequested, availableSpace;
     PortMessage response;
     
     char semaphoreKey[12];
@@ -759,15 +760,16 @@ int buyGoods() {
 
     /* Buy some available goods */
     totalGoodRequested = 0;
+    availableSpace = floor((double) getSpaceAvailableInTheHold() / configArr[SO_MERCI]);
     for (i = 0; i < configArr[SO_MERCI]; i++) {
         if (goodArr[i].loadInTon > 0 && goodArr[i].state != Expired_In_The_Port) {
             
-            int availableSpace, exchange;
-            long waitTimeNs;
+            int exchange;
+            double loadTonPerDay;
+            long waitTimeS, waitTimeNs;
 
             sem_wait(semaphore);
 
-            availableSpace = getSpaceAvailableInTheHold();
             exchange = 0;
 
             /* If x >= 0 OK, x < 0 not enought good to buy */
@@ -796,8 +798,11 @@ int buyGoods() {
 
             sem_post(semaphore);
 
-            waitTimeNs = getNanoSeconds(exchange / configArr[SO_LOADSPEED]);
-            if (safeWait(0, waitTimeNs) == -1) {
+            loadTonPerDay = (double) exchange / configArr[SO_LOADSPEED];
+            waitTimeNs = getNanoSeconds(loadTonPerDay);
+            waitTimeS = getSeconds(loadTonPerDay);
+
+            if (safeWait(waitTimeS, waitTimeNs) == -1) {
                 handleError("Error while waiting to exchange");
                 return -1;
             }

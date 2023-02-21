@@ -382,7 +382,7 @@ int checkDataDump() {
 
 int generateDailyHeader(FILE *filePointer) {
 
-    fprintf(filePointer, "\t\t=====================\t\t\nDay: %d\n\n", currentDay);
+    fprintf(filePointer, "\nDay: %d\t\t=====================\t\t\n", currentDay);
 
     return 0;
 }
@@ -420,9 +420,9 @@ int generateDailyGoodReport(FILE *filePointer) {
     }
 
     /* Print data */
-    fprintf(filePointer, "%-10s%-10s%-10s%-10s%-10s%-10s\n", "GoodId", "GPort", "GBoat", "GDeliv", "GEPort", "GEBoat");
+    fprintf(filePointer, "%-12s%-12s%-12s%-12s%-12s%-12s\n", "GOOD_ID", "G_PORT", "G_BOAT", "G_DELIV", "G_E_PORT", "G_E_BOAT");
     for (i = 0; i < arraySize; i++) {
-        fprintf(filePointer, "%-10d%-10d%-10d%-10d%-10d%-10d\n", i, goodStatus[i][0], goodStatus[i][1], goodStatus[i][2],
+        fprintf(filePointer, "%-12d%-12d%-12d%-12d%-12d%-12d\n", i, goodStatus[i][0], goodStatus[i][1], goodStatus[i][2],
             goodStatus[i][3], goodStatus[i][4]);
     }
 

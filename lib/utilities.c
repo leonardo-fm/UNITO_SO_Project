@@ -57,7 +57,10 @@ Coordinates getCornerCoordinates(int maxX, int maxY, int num) {
 /* Return a random value between min and max inclusive */
 int getRandomValue(int min, int max) {
 
-    return (rand() / (RAND_MAX / (max - (min - 1)))) + min;
+    int range = max - min + 1;
+    int randomValue = rand() % range + min;
+
+    return randomValue;
 }
 
 int getSeconds(double timeInSeconds) {
