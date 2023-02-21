@@ -382,7 +382,7 @@ int checkDataDump() {
 
 int generateDailyHeader(FILE *filePointer) {
 
-    fprintf(filePointer, "\t\t=====================\t\t\nDay: %d\n", currentDay);
+    fprintf(filePointer, "\t\t=====================\t\t\nDay: %d\n\n", currentDay);
 
     return 0;
 }
@@ -390,23 +390,51 @@ int generateDailyHeader(FILE *filePointer) {
 int generateDailyGoodReport(FILE *filePointer) {
 
     goodDailyDump *goodArr;
-    int goodArrayLength = (configArr[SO_NAVI] + configArr[SO_PORTI]) * configArr[SO_MERCI];
+    int i, arraySize, goodArrayLength;    
+    int **goodStatus;
 
-    /* After extraction */
+    arraySize = configArr[SO_MERCI];
+    goodStatus = malloc(sizeof(int *) * arraySize);
+    for (i = 0; i < arraySize; i++) {
+        /* 5 are the possible status of the good */
+        goodStatus[i] = (int *) malloc(sizeof(int) * 5);
+        memset(goodStatus[i], 0, sizeof(int) * 5);
+    }
 
-    /* Cleaning of the memory after analyzing data */
     goodArr = (goodDailyDump*) shmat(goodAnalyzerSharedMemoryId, NULL, 0);
     if (goodArr == (void*) -1) {
         handleErrno("shmat()");
         return -1;
     }
 
+    /* Aggregate data */
+    goodArrayLength = (configArr[SO_NAVI] + configArr[SO_PORTI]) * configArr[SO_MERCI];
+    for (i = 0; i < goodArrayLength; i++) {
+        int goodId = goodArr[i].goodId;
+
+        goodStatus[goodId][0] += goodArr[i].Good_In_The_Port;
+        goodStatus[goodId][1] += goodArr[i].Good_In_The_Boat;
+        goodStatus[goodId][2] += goodArr[i].Good_Delivered;
+        goodStatus[goodId][3] += goodArr[i].Good_Expired_In_The_Port;
+        goodStatus[goodId][4] += goodArr[i].Good_Expired_In_The_Boat;
+    }
+
+    /* Print data */
+    fprintf(filePointer, "%-10s%-10s%-10s%-10s%-10s%-10s\n", "GoodId", "GPort", "GBoat", "GDeliv", "GEPort", "GEBoat");
+    for (i = 0; i < arraySize; i++) {
+        fprintf(filePointer, "%-10d%-10d%-10d%-10d%-10d%-10d\n", i, goodStatus[i][0], goodStatus[i][1], goodStatus[i][2],
+            goodStatus[i][3], goodStatus[i][4]);
+    }
+
+    /* Cleaning of the memory after analyzing data */
     memset(goodArr, 0, goodArrayLength);
 
     if (shmdt(goodArr) == -1) {
         handleErrno("shmdt()");
         return -1;
     }
+
+    free(goodStatus);
 
     return 0;
 }
@@ -458,7 +486,6 @@ int generateDailyPortReport(FILE *filePointer) {
 }
 
 int cleanup() { 
-    debug("Analyzer clean");
 
     free(logPath);
 
@@ -491,6 +518,8 @@ int cleanup() {
         handleErrno("msgctl()");
         return -1;
     }
+
+    debug("Analyzer clean");
 
     return 0;
 }

@@ -170,7 +170,8 @@ int initializeBoat(char *boatIdS, char *portShareMemoryIdS, char *acknowledgeIni
         Goods emptyGood;
         emptyGood.id = i;
         emptyGood.loadInTon = 0;
-        emptyGood.state = In_The_Boat;
+        emptyGood.state = Undefined;
+        emptyGood.remaningDays = 0;
 
         goodHold[i] = emptyGood;
     }
@@ -646,6 +647,7 @@ int sellGoods() {
                 exchange = goodHold[i].loadInTon;
                 goodArr[i].loadInTon -= goodHold[i].loadInTon;
                 goodHold[i].loadInTon = 0;
+                goodHold[i].remaningDays = 0;
             } else {
                 exchange = goodHold[i].loadInTon - goodArr[i].loadInTon;
                 goodArr[i].loadInTon = 0;
@@ -768,10 +770,6 @@ int buyGoods() {
             availableSpace = getSpaceAvailableInTheHold();
             exchange = 0;
 
-            if (goodArr[i].loadInTon == 0) {
-                goodArr[i].state = In_The_Boat;
-            }
-
             /* If x >= 0 OK, x < 0 not enought good to buy */
             if (goodArr[i].loadInTon - availableSpace >= 0) {
                 exchange = availableSpace;
@@ -782,6 +780,9 @@ int buyGoods() {
                 goodArr[i].loadInTon = 0;
                 goodHold[i].loadInTon += exchange;
             }
+
+            /* Set expire date */
+            goodHold[i].remaningDays = goodArr[i].remaningDays;
 
             /* Set good state for boat */
             if (goodHold[i].loadInTon > 0) {
@@ -841,12 +842,13 @@ int getSpaceAvailableInTheHold() {
 }
 
 int cleanup() {
-    debug("Boat clean");
 
     if (shmdt(configArr) == -1) {
         handleErrno("shmdt()");
         return -1;
     }
+
+    debug("Boat clean");
 
     return 0;
 }

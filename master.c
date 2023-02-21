@@ -480,7 +480,6 @@ int generateSemaphore() {
 }
 
 int cleanup() {
-    debug("Master clean");
 
     if (shmdt(configArr) == -1) {
         handleErrno("shmdt()");
@@ -501,6 +500,8 @@ int cleanup() {
         handleErrno("shmctl()");
         return -1;
     }
+
+    debug("Master clean");
 
     return 0;
 }

@@ -621,6 +621,7 @@ int dumpData() {
         } else {
             gdd.Good_Expired_In_The_Port = 0;
         }
+
         gdd.Good_In_The_Port = arrStock[i].loadInTon;
         gdd.Good_Delivered = totalDailyGoodsRecived;
 
@@ -682,6 +683,7 @@ int newDay() {
     
     int i;
     Goods *arrStock;
+    char buffer[128];
 
     arrStock = (Goods*) shmat(goodStockShareMemoryId, NULL, 0);
     if (arrStock == (void*) -1) {
@@ -697,6 +699,9 @@ int newDay() {
             }
         }
     }
+
+    snprintf(buffer, sizeof(buffer), "Port %d, free quays %d/%d", port.id, port.availableQuays, port.quays);
+    debug(buffer);
 
     return 0;
 }
@@ -804,7 +809,6 @@ int generateSemaphore(int semKey) {
 }
 
 int cleanup() {
-    debug("Port clean");
 
     if (shmdt(configArr) == -1) {
         handleErrno("shmdt()");
@@ -825,6 +829,8 @@ int cleanup() {
         handleErrno("msgctl()");
         return -1;
     }
+
+    debug("Port clean");
 
     return 0;
 }
