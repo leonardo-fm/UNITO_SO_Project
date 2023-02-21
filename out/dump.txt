@@ -1,35 +1,40 @@
 
-Day: 0		=====================		
+Day: 0
 GOOD_ID     G_PORT      G_BOAT      G_DELIV     G_E_PORT    G_E_BOAT    
-0           0           0           744         0           0           
-1           31188       62          744         0           0           
-2           93192       558         744         0           0           
-3           124504      496         744         0           0           
+0           198040      1700        1810        0           0           
 
-Day: 1		=====================		
+Day: 1
 GOOD_ID     G_PORT      G_BOAT      G_DELIV     G_E_PORT    G_E_BOAT    
-0           0           0           1550        0           0           
-1           31002       248         1550        0           0           
-2           92541       1209        1550        0           0           
-3           123667      1333        1550        0           0           
+0           194140      3760        3870        0           0           
 
-Day: 2		=====================		
+Day: 2
 GOOD_ID     G_PORT      G_BOAT      G_DELIV     G_E_PORT    G_E_BOAT    
-0           0           0           2454        0           0           
-1           30707       357         2454        0           0           
-2           91950       1676        2454        0           0           
-3           122750      2250        2454        0           0           
+0           190490      3870        3650        0           0           
 
-Day: 3		=====================		
+Day: 3
 GOOD_ID     G_PORT      G_BOAT      G_DELIV     G_E_PORT    G_E_BOAT    
-0           0           0           1349        0           0           
-1           30472       483         1349        0           0           
-2           91766       1426        1349        0           0           
-3           122285      2715        1349        0           0           
+0           186660      4320        3830        0           0           
 
-Day: 4		=====================		
+Day: 4
 GOOD_ID     G_PORT      G_BOAT      G_DELIV     G_E_PORT    G_E_BOAT    
-0           0           0           1987        0           0           
-1           30140       605         1987        0           0           
-2           91436       1228        1987        0           0           
-3           121576      3424        1987        0           0           
+0           182990      3890        3640        0           0           
+
+Day: 5
+GOOD_ID     G_PORT      G_BOAT      G_DELIV     G_E_PORT    G_E_BOAT    
+0           179370      3800        3680        0           0           
+
+Day: 6
+GOOD_ID     G_PORT      G_BOAT      G_DELIV     G_E_PORT    G_E_BOAT    
+0           175560      3860        3760        0           0           
+
+Day: 7
+GOOD_ID     G_PORT      G_BOAT      G_DELIV     G_E_PORT    G_E_BOAT    
+0           171700      4400        3890        0           0           
+
+Day: 8
+GOOD_ID     G_PORT      G_BOAT      G_DELIV     G_E_PORT    G_E_BOAT    
+0           168080      3950        3640        0           0           
+
+Day: 9
+GOOD_ID     G_PORT      G_BOAT      G_DELIV     G_E_PORT    G_E_BOAT    
+0           164050      4410        3920        0           0           

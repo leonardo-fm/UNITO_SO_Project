@@ -31,7 +31,6 @@ Port port;
 Goods **goodExchange;
 
 int simulationRunning = 1;
-int totalDailyGoodsSold, totalDailyGoodsRecived;
 
 void handle_port_simulation_signals(int signal) {
 
@@ -229,7 +228,7 @@ int initializePortStruct(char *portIdString, char *portShareMemoryIdS) {
 
 int initializeExchangeGoods() {
 
-    Goods *arrStock, *arrReques;
+    Goods *arrStock, *arrRequest;
     int maxRequest, i;
 
     /* Generate shared memory for good stock */
@@ -238,11 +237,13 @@ int initializeExchangeGoods() {
         handleError("Error during creation of shared memory for goods stock");
         return -1;
     }
+
     arrStock = (Goods*) shmat(goodStockShareMemoryId, NULL, 0);
     if (arrStock == (void*) -1) {
         handleErrno("shmat()");
         return -1;
     }
+
     if (generateSemaphore(goodStockShareMemoryId) == -1) {
         handleError("Error during creation of semaphore for goods stock");
         return -1;
@@ -254,11 +255,13 @@ int initializeExchangeGoods() {
         handleError("Error during creation of shared memory for goods request");
         return -1;
     }
-    arrReques = (Goods*) shmat(goodRequestShareMemoryId, NULL, 0);
-    if (arrReques == (void*) -1) {
+
+    arrRequest = (Goods*) shmat(goodRequestShareMemoryId, NULL, 0);
+    if (arrRequest == (void*) -1) {
         handleErrno("shmat()");
         return -1;
     }
+    
     if (generateSemaphore(goodRequestShareMemoryId) == -1) {
         handleError("Error during creation of semaphore for goods request");
         return -1;
@@ -279,7 +282,7 @@ int initializeExchangeGoods() {
         goodRequested.loadInTon = maxRequest;
         goodRequested.state = In_The_Port;
 
-        arrReques[i] = goodRequested;
+        arrRequest[i] = goodRequested;
     }
 
     if (shmdt(arrStock) == -1) {
@@ -287,7 +290,7 @@ int initializeExchangeGoods() {
         return -1;
     }
 
-    if (shmdt(arrReques) == -1) {
+    if (shmdt(arrRequest) == -1) {
         handleErrno("shmdt()");
         return -1;
     }
@@ -297,60 +300,17 @@ int initializeExchangeGoods() {
 
 int initializePortGoods(char *goodShareMemoryIdS) {
 
-    char semaphoreKey[12];
-    sem_t *semaphore;
-
-    int i, j, shareMemoryId, maxTake, goodsToTakeArrLength;
-    int *goodsToTake;
+    int i, shareMemoryId;
 
     char *p;
-    Goods *arrGood, *arrStock, *arrReques; 
-    
-    if (sprintf(semaphoreKey, "%d", getppid()) == -1) {
-        handleError("Error during conversion of the pid for semaphore to a string");
-        return -1;
-    }   
-
-    semaphore = sem_open(semaphoreKey, O_EXCL, 0600, 1);
-    if (semaphore == SEM_FAILED) {
-        handleErrno("sem_open()");
-        return -1;
-    }
-
-    /* Generate an array of random number with no repetitions */
-    goodsToTakeArrLength = configArr[SO_MERCI] / 2;
-    goodsToTake = (int*) malloc(sizeof(int) * goodsToTakeArrLength);
-
-    for (i = 0; i < configArr[SO_MERCI] - 1; i++) {
-
-        int flag, randomValue;
-        
-        flag = 1;
-        while (flag == 1) {
-            flag = 0;
-            randomValue = getRandomValue(0, (configArr[SO_MERCI] - 1));
-            for (j = 0; j < goodsToTakeArrLength; j++) {
-                if (goodsToTake[j] == randomValue) {
-                    flag = 1;
-                    break;
-                }
-            }
-        }
-
-        goodsToTake[i] = randomValue;
-        printf("CPG[%d]: %d\n", i, goodsToTake[i]);
-    }
+    Goods *masterGoodArr, *arrStock, *arrRequest; 
 
     shareMemoryId = strtol(goodShareMemoryIdS, &p, 10);
-    arrGood = (Goods*) shmat(shareMemoryId, NULL, 0);
-    if (arrGood == (void*) -1) {
+    masterGoodArr = (Goods*) shmat(shareMemoryId, NULL, 0);
+    if (masterGoodArr == (void*) -1) {
         handleErrno("shmat()");
         return -1;
     }
-
-    maxTake = (configArr[SO_FILL] / 2) / configArr[SO_MERCI] / configArr[SO_PORTI];
-
-    sem_wait(semaphore);
 
     arrStock = (Goods*) shmat(goodStockShareMemoryId, NULL, 0);
     if (arrStock == (void*) -1) {
@@ -358,47 +318,33 @@ int initializePortGoods(char *goodShareMemoryIdS) {
         return -1;
     }
 
-    arrReques = (Goods*) shmat(goodRequestShareMemoryId, NULL, 0);
-    if (arrReques == (void*) -1) {
+    arrRequest = (Goods*) shmat(goodRequestShareMemoryId, NULL, 0);
+    if (arrRequest == (void*) -1) {
         handleErrno("shmat()");
         return -1;
     }
 
-    for (i = 0; i < goodsToTakeArrLength; i++) {
+    for (i = 0; i < configArr[SO_MERCI]; i++) {
         
-        int currentGood = goodsToTake[i];
-        printf("CG: %d\n", currentGood);
+        int stockOrRequest = getRandomValue(0, 1);
 
-        /* Set life span */
-        arrStock[currentGood].remaningDays = arrGood[currentGood].remaningDays;
-        arrReques[currentGood].remaningDays = arrGood[currentGood].remaningDays;
-
-        if (arrGood[currentGood].loadInTon == 0) {
-            continue;
-        }
-
-        if (arrGood[currentGood].loadInTon < maxTake) {
-            arrStock[currentGood].loadInTon += arrGood[currentGood].loadInTon;
-            arrGood[currentGood].loadInTon = 0;
+        if (stockOrRequest == 0) {
+            /* Fill stock */
+            arrStock[i].remaningDays = masterGoodArr[i].remaningDays;
+            arrStock[i].loadInTon = masterGoodArr[i].loadInTon;
+            arrStock[i].state = In_The_Port;
         } else {
-            arrGood[currentGood].loadInTon -= maxTake;
-            arrStock[currentGood].loadInTon += maxTake;
+            /* Fill request */
+            arrRequest[i].remaningDays = masterGoodArr[i].remaningDays;
+            arrRequest[i].loadInTon = masterGoodArr[i].loadInTon;
+            arrRequest[i].state = In_The_Port;
         }
 
-        /* Set to 0 the request for the current good in the port */
-        arrReques[currentGood].loadInTon = 0;
+        arrStock[i].dailyExchange = 0;
+        arrRequest[i].dailyExchange = 0;
     }
 
-    free(goodsToTake);
-
-    sem_post(semaphore);
-
-    if (sem_close(semaphore) < 0) {
-        handleErrno("sem_close()");
-        return -1;
-    }
-
-    if (shmdt(arrGood) == -1) {
+    if (shmdt(masterGoodArr) == -1) {
         handleErrno("shmdt()");
         return -1;
     }
@@ -408,7 +354,7 @@ int initializePortGoods(char *goodShareMemoryIdS) {
         return -1;
     }
 
-    if (shmdt(arrReques) == -1) {
+    if (shmdt(arrRequest) == -1) {
         handleErrno("shmdt()");
         return -1;
     }
@@ -504,7 +450,10 @@ int work() {
                         };
                         break;
                     case PA_SE_SUMMARY:
-                        totalDailyGoodsRecived += receivedMsg.msg.data.data1;
+                        if (handlePA_SE_SUMMARY(receivedMsg.msg.data.data1, receivedMsg.msg.data.data2) == -1) {
+                            handleError("Error during PA_SE_SUMMARY handling");
+                            return -1;
+                        };
                         break;
                     case PA_RQ_GOOD:
                         if (handlePA_RQ_GOOD(writingMsgQueue) == -1) {
@@ -513,7 +462,10 @@ int work() {
                         };
                         break;
                     case PA_RQ_SUMMARY:
-                        totalDailyGoodsRecived += receivedMsg.msg.data.data1;
+                        if (handlePA_RQ_SUMMARY(receivedMsg.msg.data.data1, receivedMsg.msg.data.data2) == -1) {
+                            handleError("Error during PA_RQ_SUMMARY handling");
+                            return -1;
+                        };
                         break;
                     case PA_EOT:
                         if (handlePA_EOT(writingMsgQueue) == -1) {
@@ -584,8 +536,8 @@ int freePendingMsgs() {
 }
 
 int dumpData() {
-    int i, totalGoodInStock, goodReferenceId;
-    Goods *arrStock;
+    int i, totalGoodInStock, goodReferenceId, totalDailyGoodsSold, totalDailyGoodsRecived;
+    Goods *arrStock, *arrRequest;
 
     goodDailyDump *goodArr;
     goodDailyDump gdd;
@@ -599,11 +551,23 @@ int dumpData() {
         return -1;
     }
 
+    arrRequest = (Goods*) shmat(goodRequestShareMemoryId, NULL, 0);
+    if (arrRequest == (void*) -1) {
+        handleErrno("shmat()");
+        return -1;
+    }
+
+    /* Init data */
     totalGoodInStock = 0;
+    totalDailyGoodsSold = 0;
+    totalDailyGoodsRecived = 0;
     for (i = 0; i < configArr[SO_MERCI]; i++) {
         if(arrStock[i].state != Expired_In_The_Port) {
             totalGoodInStock += arrStock[i].loadInTon;
         }
+        
+        totalDailyGoodsSold += arrStock[i].dailyExchange;        
+        totalDailyGoodsRecived += arrRequest[i].dailyExchange;
     }
 
     /* Send goods data */
@@ -627,7 +591,7 @@ int dumpData() {
         }
 
         gdd.Good_In_The_Port = arrStock[i].loadInTon;
-        gdd.Good_Delivered = totalDailyGoodsRecived;
+        gdd.Good_Delivered = arrRequest[i].dailyExchange;
 
         gdd.Good_Expired_In_The_Boat = 0;
         gdd.Good_In_The_Boat = 0;
@@ -666,8 +630,10 @@ int dumpData() {
         return -1;
     }
 
-    totalDailyGoodsRecived = 0;
-    totalDailyGoodsSold = 0;
+    if (shmdt(arrRequest) == -1) {
+        handleErrno("shmdt()");
+        return -1;
+    }
 
     return 0;
 }
@@ -686,11 +652,17 @@ int waitForNewDay() {
 int newDay() {
     
     int i;
-    Goods *arrStock;
+    Goods *arrStock, *arrRequest;
     char buffer[128];
 
     arrStock = (Goods*) shmat(goodStockShareMemoryId, NULL, 0);
     if (arrStock == (void*) -1) {
+        handleErrno("shmat()");
+        return -1;
+    }
+
+    arrRequest = (Goods*) shmat(goodRequestShareMemoryId, NULL, 0);
+    if (arrRequest == (void*) -1) {
         handleErrno("shmat()");
         return -1;
     }
@@ -702,6 +674,20 @@ int newDay() {
                 arrStock[i].state = Expired_In_The_Port;
             }
         }
+
+        /* reset daily exchanges */
+        arrStock[i].dailyExchange = 0;
+        arrRequest[i].dailyExchange = 0;
+    }
+
+    if (shmdt(arrStock) == -1) {
+        handleErrno("shmdt()");
+        return -1;
+    }
+
+    if (shmdt(arrRequest) == -1) {
+        handleErrno("shmdt()");
+        return -1;
     }
 
     snprintf(buffer, sizeof(buffer), "Port %d, free quays %d/%d", port.id, port.availableQuays, port.quays);
@@ -751,6 +737,26 @@ int handlePA_SE_GOOD(int queueId) {
     return 0;
 }
 
+int handlePA_SE_SUMMARY(int goodId, int exchangeQuantity) {
+
+    Goods *arrStock;
+
+    arrStock = (Goods*) shmat(goodStockShareMemoryId, NULL, 0);
+    if (arrStock == (void*) -1) {
+        handleErrno("shmat()");
+        return -1;
+    }
+
+    arrStock[goodId].dailyExchange += exchangeQuantity;
+
+    if (shmdt(arrStock) == -1) {
+        handleErrno("shmdt()");
+        return -1;
+    }
+
+    return 0;
+}
+
 int handlePA_RQ_GOOD(int queueId) {
 
     if (simulationRunning == 1) {
@@ -764,6 +770,26 @@ int handlePA_RQ_GOOD(int queueId) {
             handleError("Error during send RQ NO");
             return -1;
         }
+    }
+
+    return 0;
+}
+
+int handlePA_RQ_SUMMARY(int goodId, int exchangeQuantity) {
+
+    Goods *arrRequest;
+
+    arrRequest = (Goods*) shmat(goodRequestShareMemoryId, NULL, 0);
+    if (arrRequest == (void*) -1) {
+        handleErrno("shmat()");
+        return -1;
+    }
+
+    arrRequest[goodId].dailyExchange += exchangeQuantity;
+
+    if (shmdt(arrRequest) == -1) {
+        handleErrno("shmdt()");
+        return -1;
     }
 
     return 0;

@@ -571,7 +571,7 @@ int haveIGoodsToBuy() {
 
 int sellGoods() {
 
-    int waitResponse, i, totalGoodSold;
+    int waitResponse, i;
     PortMessage response;
 
     char semaphoreKey[12];
@@ -629,7 +629,6 @@ int sellGoods() {
     }
 
     /* Sell all available goods */
-    totalGoodSold = 0;
     for (i = 0; i < configArr[SO_MERCI]; i++) {
         if (goodHold[i].loadInTon > 0 && goodHold[i].state != Expired_In_The_Boat) {
 
@@ -676,14 +675,12 @@ int sellGoods() {
                 return -1;
             }
 
-            totalGoodSold += exchange;
+            /* Send sell report to the port */
+            if (sendMessage(writingMsgQueue, PA_SE_SUMMARY, i, exchange) == -1) {
+                handleError("Failed to send PA_SE_SUMMARY comunication");
+                return -1;
+            }
         }    
-    }
-
-    /* Send sell report to the port */
-    if (sendMessage(writingMsgQueue, PA_SE_SUMMARY, totalGoodSold, 0) == -1) {
-        handleError("Failed to send PA_SE_SUMMARY comunication");
-        return -1;
     }
 
     if (sem_close(semaphore) < 0) {
@@ -701,7 +698,7 @@ int sellGoods() {
 
 int buyGoods() {
 
-    int waitResponse, i, totalGoodRequested, availableSpace;
+    int waitResponse, i, availableSpace;
     PortMessage response;
     
     char semaphoreKey[12];
@@ -759,7 +756,6 @@ int buyGoods() {
     }
 
     /* Buy some available goods */
-    totalGoodRequested = 0;
     availableSpace = floor((double) getSpaceAvailableInTheHold() / configArr[SO_MERCI]);
     for (i = 0; i < configArr[SO_MERCI]; i++) {
         if (goodArr[i].loadInTon > 0 && goodArr[i].state != Expired_In_The_Port) {
@@ -806,19 +802,17 @@ int buyGoods() {
                 handleError("Error while waiting to exchange");
                 return -1;
             }
-
-            totalGoodRequested += exchange;
             
+            /* Send request report to the port */
+            if (sendMessage(writingMsgQueue, PA_RQ_SUMMARY, i, exchange) == -1) {
+                handleError("Failed to send PA_RQ_SUMMARY comunication");
+                return -1;
+            }
+
             if (getSpaceAvailableInTheHold() == 0) {
                 break;
             }
         }    
-    }
-
-    /* Send request report to the port */
-    if (sendMessage(writingMsgQueue, PA_RQ_SUMMARY, totalGoodRequested, 0) == -1) {
-        handleError("Failed to send PA_RQ_SUMMARY comunication");
-        return -1;
     }
 
     if (sem_close(semaphore) < 0) {

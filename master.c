@@ -414,19 +414,14 @@ int initializeGoods(int goodShareMemoryId) {
         return -1;
     }
 
-    /* Init of semaphore */
-    if (generateSemaphore() == -1) {
-        handleError("Error while generating semaphore");
-        return -1;
-    }
-
     return 0;
 }
 
 /* Generate all the goods requested and initialize them */
 int generateGoods(int goodShareMemoryId) {
 
-    int goodQuantity, i;
+    int *randomGoodDistribution;
+    int i;
 
     Goods *arr = (Goods*) shmat(goodShareMemoryId, NULL, 0);
     if (arr == (void*) -1) {
@@ -434,11 +429,14 @@ int generateGoods(int goodShareMemoryId) {
         return -1;
     }
 
-    goodQuantity = (int)((configArr[SO_FILL] / 2) / configArr[SO_MERCI]);
+    randomGoodDistribution = (int *) malloc(sizeof(int) * configArr[SO_MERCI]);
+    generateSubgroupSums(randomGoodDistribution, configArr[SO_FILL], configArr[SO_MERCI]);
+
     for (i = 0; i < configArr[SO_MERCI]; i++) {
         Goods good;
         good.id = i;
-        good.loadInTon = goodQuantity;
+        /* I got the amount of each port must have */
+        good.loadInTon = randomGoodDistribution[i] / configArr[SO_PORTI];
         good.state = Undefined;
         good.remaningDays = getRandomValue(configArr[SO_MIN_VITA], configArr[SO_MAX_VITA]);
 
@@ -450,31 +448,7 @@ int generateGoods(int goodShareMemoryId) {
         return -1;
     }
 
-    return 0;
-}
-
-/* Generate a semaphore */
-/* https://stackoverflow.com/questions/32205396/share-posix-semaphore-among-multiple-processes */
-int generateSemaphore() {
-
-    sem_t *semaphore;
-
-    char semaphoreKey[12];
-    if (sprintf(semaphoreKey, "%d", getpid()) == -1) {
-        handleError("Error during conversion of the pid for semaphore to a string");
-        return -1;
-    }   
-
-    semaphore = sem_open(semaphoreKey, O_CREAT, 0600, 1);
-    if (semaphore == SEM_FAILED) {
-        handleErrno("sem_open()");
-        return -1;
-    }
-
-    if (sem_close(semaphore) < 0) {
-        handleErrno("sem_close()");
-        return -1;
-    }
+    free(randomGoodDistribution);
 
     return 0;
 }

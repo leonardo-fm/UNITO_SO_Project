@@ -382,7 +382,7 @@ int checkDataDump() {
 
 int generateDailyHeader(FILE *filePointer) {
 
-    fprintf(filePointer, "\nDay: %d\t\t=====================\t\t\n", currentDay);
+    fprintf(filePointer, "\nDay: %d\n", currentDay);
 
     return 0;
 }

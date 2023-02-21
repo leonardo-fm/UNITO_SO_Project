@@ -39,6 +39,7 @@ typedef struct {
     int id;
     int loadInTon;
     int remaningDays;
+    int dailyExchange;
     GoodsState state;
 } Goods;
 
