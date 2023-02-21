@@ -9,6 +9,7 @@
 #include <signal.h>
 
 #include "msgPortProtocol.h"
+#include "customMacro.h"
 
 int stopWaitingQueues = 0;
 
@@ -24,15 +25,7 @@ int sendMessage(int msgQueueId, ProtocolActions action, int data1, int data2) {
     pMsg.msg.data.data2 = data2;
 
     if (msgsnd(msgQueueId, &pMsg, MAX_BUFFER_PORT_MSG, 0) == -1) {
-        printf("Error during sending of the message errno:%d\n", errno);
-
-        /* Check if the msg queue exist */
-        if (kill(msgQueueId, 0) == 0) {
-            printf("The msg queue %d exist\n", msgQueueId);
-        } else {
-            printf("The msg queue %d not exist\n", msgQueueId);
-        }
-
+        handleErrno("msgsnd()");
         return -1;
     }
 
@@ -65,14 +58,7 @@ int receiveMessage(int msgQueueId, PortMessage *pMsg, int flag, int forceStop) {
         /* No message in the queue */
         return -2;
     } else if (errno != EINTR && errno != 0) {
-        printf("Error during retrieving the message from msg queue: %d (swq: %d), errno: %d\n", msgQueueId, stopWaitingQueues, errno);
-        /* Check if the msg queue exist */
-        if (kill(msgQueueId, 0) == 0) {
-            printf("The msg queue %d exist\n", msgQueueId);
-        } else {
-            printf("The msg queue %d not exist\n", msgQueueId);
-        }
-        
+        handleErrno("msgrcv()");
         return -1;
     }
 

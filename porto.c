@@ -59,7 +59,7 @@ void handle_port_simulation_signals(int signal) {
             stopWaitingQueues = 1;
             break;
         default:
-            printf("Intercept a unhandled signal: %d\n", signal);
+            handleError("Intercept a unhandled signal");
             break;
     }
 }
@@ -78,22 +78,22 @@ int main(int argx, char *argv[]) {
     initializeSingalsHandlers();
 
     if (initializeConfig(argv[1], argv[4], argv[5]) == -1) {
-        printf("Initialization of port config failed\n");
+        handleError("Initialization of port config failed");
         safeExit(1);
     }
 
     if (initializePort(argv[0], argv[2], argv[3]) == -1) {
-        printf("Initialization of port %s failed\n", argv[0]);
+        handleError("Initialization of port failed");
         safeExit(2);
     }
 
     if (work() == -1) {
-        printf("Error during port %d work\n", port.id);
+        handleError("Error during port work");
         safeExit(3);
     }
 
     if (cleanup() == -1) {
-        printf("Port cleanup failed\n");
+        handleError("Port cleanup failed");
         safeExit(4);
     }
 
@@ -134,7 +134,7 @@ int initializeConfig(char *configShareMemoryIdString, char *goodAnalyzerShareMem
     
     configArr = (int*) shmat(configShareMemoryId, NULL, 0);
     if (configArr == (void*) -1) {
-        printf("The config key as failed to be conveted in port\n");
+        handleErrno("shmat()");
         return -1;
     }
 
@@ -144,17 +144,17 @@ int initializeConfig(char *configShareMemoryIdString, char *goodAnalyzerShareMem
 int initializePort(char *portIdString, char *portShareMemoryIdS, char *goodShareMemoryIdS) {
 
     if (initializePortStruct(portIdString, portShareMemoryIdS) == -1) {
-        printf("Error occurred during init of port struct\n");
+        handleError("Error occurred during init of port struct");
         return -1;
     }
 
     if (initializeExchangeGoods() == -1) {
-        printf("Error occurred during init of goods exchange\n");
+        handleError("Error occurred during init of goods exchange");
         return -1;
     }
 
     if (initializePortGoods(goodShareMemoryIdS) == -1) {
-        printf("Error occurred during init of goods\n");
+        handleError("Error occurred during init of goods");
         return -1;
     }
 
@@ -172,12 +172,13 @@ int initializePortStruct(char *portIdString, char *portShareMemoryIdS) {
     
     /* Generate a message queue to comunicate with the boats */
     if (sprintf(queueKey, "%d", portId) == -1) {
-        printf("Error during conversion of the port id to a string\n");
+        handleError("Error during conversion of the port id to a string");
         return -1;
     }
 
     portMsgId = msgget(IPC_PRIVATE, IPC_CREAT | 0600);
     if (portMsgId == -1) {
+        handleErrno("msgget()");
         return -1;
     }
 
@@ -194,13 +195,14 @@ int initializePortStruct(char *portIdString, char *portShareMemoryIdS) {
     shareMemoryId = strtol(portShareMemoryIdS, &p, 10);
     arrPort = (Port*) shmat(shareMemoryId, NULL, 0);
     if (arrPort == (void*) -1) {
+        handleErrno("shmat()");
         return -1;
     }
 
     arrPort[port.id] = port;
 
     if (shmdt(arrPort) == -1) {
-        printf("The arr init port detach failed\n");
+        handleErrno("shmdt()");
         return -1;
     }
 
@@ -215,32 +217,32 @@ int initializeExchangeGoods() {
     /* Generate shared memory for good stock */
     goodStockShareMemoryId = generateShareMemory(sizeof(Goods) * configArr[SO_MERCI]);
     if (goodStockShareMemoryId == -1) {
-        printf("Error during creation of shared memory for goods stock\n");
+        handleError("Error during creation of shared memory for goods stock");
         return -1;
     }
     arrStock = (Goods*) shmat(goodStockShareMemoryId, NULL, 0);
     if (arrStock == (void*) -1) {
-        printf("Error during stock type assigne\n");
+        handleErrno("shmat()");
         return -1;
     }
     if (generateSemaphore(goodStockShareMemoryId) == -1) {
-        printf("Error during creation of semaphore for goods stock\n");
+        handleError("Error during creation of semaphore for goods stock");
         return -1;
     }
 
     /* Generate shared memory for good request */
     goodRequestShareMemoryId = generateShareMemory(sizeof(Goods) * configArr[SO_MERCI]);
     if (goodRequestShareMemoryId == -1) {
-        printf("Error during creation of shared memory for goods request\n");
+        handleError("Error during creation of shared memory for goods request");
         return -1;
     }
     arrReques = (Goods*) shmat(goodRequestShareMemoryId, NULL, 0);
     if (arrReques == (void*) -1) {
-        printf("Error during request type assigne\n");
+        handleErrno("shmat()");
         return -1;
     }
     if (generateSemaphore(goodRequestShareMemoryId) == -1) {
-        printf("Error during creation of semaphore for goods request\n");
+        handleError("Error during creation of semaphore for goods request");
         return -1;
     }
 
@@ -263,12 +265,12 @@ int initializeExchangeGoods() {
     }
 
     if (shmdt(arrStock) == -1) {
-        printf("The arr stock detach failed\n");
+        handleErrno("shmdt()");
         return -1;
     }
 
     if (shmdt(arrReques) == -1) {
-        printf("The arr request detach failed\n");
+        handleErrno("shmdt()");
         return -1;
     }
 
@@ -287,13 +289,13 @@ int initializePortGoods(char *goodShareMemoryIdS) {
     Goods *arrGood, *arrStock, *arrReques; 
     
     if (sprintf(semaphoreKey, "%d", getppid()) == -1) {
-        printf("Error during conversion of the pid for semaphore to a string\n");
+        handleError("Error during conversion of the pid for semaphore to a string");
         return -1;
     }   
 
     semaphore = sem_open(semaphoreKey, O_EXCL, 0600, 1);
     if (semaphore == SEM_FAILED) {
-        printf("port failed to found semaphore with key %s\n", semaphoreKey);
+        handleErrno("sem_open()");
         return -1;
     }
 
@@ -322,7 +324,7 @@ int initializePortGoods(char *goodShareMemoryIdS) {
     shareMemoryId = strtol(goodShareMemoryIdS, &p, 10);
     arrGood = (Goods*) shmat(shareMemoryId, NULL, 0);
     if (arrGood == (void*) -1) {
-        printf("Error opening goods shared memory\n");
+        handleErrno("shmat()");
         return -1;
     }
 
@@ -332,13 +334,13 @@ int initializePortGoods(char *goodShareMemoryIdS) {
 
     arrStock = (Goods*) shmat(goodStockShareMemoryId, NULL, 0);
     if (arrStock == (void*) -1) {
-        printf("Error while opening stock good\n");
+        handleErrno("shmat()");
         return -1;
     }
 
     arrReques = (Goods*) shmat(goodRequestShareMemoryId, NULL, 0);
     if (arrReques == (void*) -1) {
-        printf("Error while opening request good\n");
+        handleErrno("shmat()");
         return -1;
     }
 
@@ -370,22 +372,22 @@ int initializePortGoods(char *goodShareMemoryIdS) {
     sem_post(semaphore);
 
     if (sem_close(semaphore) < 0) {
-        printf("Error unable to close the good semaphore\n");
+        handleErrno("sem_close()");
         return -1;
     }
 
     if (shmdt(arrGood) == -1) {
-        printf("The arr goods detach failed\n");
+        handleErrno("shmdt()");
         return -1;
     }
 
     if (shmdt(arrStock) == -1) {
-        printf("The arr stock detach failed\n");
+        handleErrno("shmdt()");
         return -1;
     }
 
     if (shmdt(arrReques) == -1) {
-        printf("The arr request detach failed\n");
+        handleErrno("shmdt()");
         return -1;
     }
 
@@ -399,7 +401,7 @@ int work() {
 
     /* wait for simulation to start */
     if (waitForStart() != 0) {
-        printf("Error while waiting for start\n");
+        handleError("Error while waiting for start");
         return -1;
     }
 
@@ -422,7 +424,7 @@ int work() {
             int setupMsgStatus = receiveMessage(port.msgQueuId, &setupMsg, flag, 1);
 
             if (setupMsgStatus == -1) {
-                printf("Error during reciving message from boat\n");
+                handleError("Error during reciving message from boat");
                 return -1;
             }
             if (setupMsgStatus == 0 && setupMsg.msg.data.action == PA_SETUP) {
@@ -452,7 +454,7 @@ int work() {
             msgStatus = receiveMessage(readingMsgQueue, &receivedMsg, 0, 0);
 
             if (msgStatus == -1) {
-                printf("Error during reciving message (r: %d, w: %d) from boat\n", readingMsgQueue, writingMsgQueue);
+                handleError("Error during reciving message from boat");
                 return -1;
             }
 
@@ -465,7 +467,7 @@ int work() {
                     case PA_ACCEPT:
                         acceptResponse = handlePA_ACCEPT(writingMsgQueue);
                         if (acceptResponse == -1) {
-                            printf("Error during ACCEPT handling\n");
+                            handleError("Error during ACCEPT handling");
                             return -1;
                         };
                         if (acceptResponse == 1) {
@@ -475,7 +477,7 @@ int work() {
                         break;
                     case PA_SE_GOOD:
                         if (handlePA_SE_GOOD(writingMsgQueue) == -1) {
-                            printf("Error during SE_GOOD handling\n");
+                            handleError("Error during SE_GOOD handling");
                             return -1;
                         };
                         break;
@@ -484,7 +486,7 @@ int work() {
                         break;
                     case PA_RQ_GOOD:
                         if (handlePA_RQ_GOOD(writingMsgQueue) == -1) {
-                            printf("Error during RQ_GOOD handling\n");
+                            handleError("Error during RQ_GOOD handling");
                             return -1;
                         };
                         break;
@@ -493,7 +495,7 @@ int work() {
                         break;
                     case PA_EOT:
                         if (handlePA_EOT(writingMsgQueue) == -1) {
-                            printf("Error during EOT handling\n");
+                            handleError("Error during EOT handling");
                             return -1;
                         };
                         queues[0][j] = -1;
@@ -507,7 +509,7 @@ int work() {
     }
 
     if (freePendingMsgs() == -1) {
-        printf("Error while freeing pending messages\n");
+        handleError("Error while freeing pending messages");
         return -1;
     }
 
@@ -536,7 +538,7 @@ int freePendingMsgs() {
     
     msgInfoResponse = msgctl(port.msgQueuId, IPC_STAT, &msgInfo);
     if (msgInfoResponse == -1) {
-        printf("Error while retrieving info about message queue\n");
+        handleErrno("msgctl()");
         return -1;
     }
 
@@ -546,12 +548,12 @@ int freePendingMsgs() {
         int pendingMsgStatus = receiveMessage(port.msgQueuId, &pendingMsg, 0, 0);
 
         if (pendingMsgStatus == -1) {
-            printf("Error during reciving message from boat on pending messages\n");
+            handleError("Error during reciving message from boat on pending messages");
             return -1;
         }
         
         if (sendMessage(pendingMsg.msg.data.data2, PA_N, -1, -1) == -1) {
-            printf("Error during send NO\n");
+            handleError("Error during send NO");
             return -1;
         }
     }
@@ -571,7 +573,7 @@ int dumpData() {
 
     arrStock = (Goods*) shmat(goodStockShareMemoryId, NULL, 0);
     if (arrStock == (void*) -1) {
-        printf("Error while opening stock good\n");
+        handleErrno("shmat()");
         return -1;
     }
 
@@ -586,7 +588,7 @@ int dumpData() {
     goodReferenceId = port.id * configArr[SO_MERCI];
     goodArr = (goodDailyDump*) shmat(goodAnalyzerSharedMemoryId, NULL, 0);
     if (goodArr == (void*) -1) {
-        printf("Error during opening good analyzer share memory in port\n");
+        handleErrno("shmat()");
         return -1;
     }
 
@@ -611,14 +613,14 @@ int dumpData() {
     }
 
     if (shmdt(goodArr) == -1) {
-        printf("The arr good detach failed in port\n");
+        handleErrno("shmdt()");
         return -1;
     }
 
     /* Send port data */
     portArr = (portDailyDump*) shmat(portAnalyzerSharedMemoryId, NULL, 0);
     if (portArr == (void*) -1) {
-        printf("Error during opening port analyzer share memory in port\n");
+        handleErrno("shmat()");
         return -1;
     }
 
@@ -632,12 +634,12 @@ int dumpData() {
     portArr[port.id] = pdd;
 
     if (shmdt(portArr) == -1) {
-        printf("The arr port detach failed\n");
+        handleErrno("shmdt()");
         return -1;
     }
 
     if (shmdt(arrStock) == -1) {
-        printf("The arr stock detach failed\n");
+        handleErrno("shmdt()");
         return -1;
     }
 
@@ -665,7 +667,7 @@ int newDay() {
 
     arrStock = (Goods*) shmat(goodStockShareMemoryId, NULL, 0);
     if (arrStock == (void*) -1) {
-        printf("Error while opening stock good\n");
+        handleErrno("shmat()");
         return -1;
     }
 
@@ -686,13 +688,14 @@ int handlePA_ACCEPT(int queueId) {
 
     if (port.availableQuays > 0 && simulationRunning == 1) {
         if (sendMessage(queueId, PA_Y, -1, -1) == -1) {
-            printf("Error during send ACCEPT\n");
+            handleError("Error during send ACCEPT");
             return -1;
         }
+        
         port.availableQuays--;
     } else {
         if (sendMessage(queueId, PA_N, -1, -1) == -1) {
-            printf("Error during send ACCEPT\n");
+            handleError("Error during send ACCEPT");
             return -1;
         }
 
@@ -707,12 +710,12 @@ int handlePA_SE_GOOD(int queueId) {
     if (simulationRunning == 1) {
         /* The boat want to sell some goods */
         if (sendMessage(queueId, PA_Y, goodRequestShareMemoryId, goodRequestShareMemoryId) == -1) {
-                printf("Error during send SE_GOOD errno: %d\n", errno);
-                return -1;
+            handleError("Error during send SE_GOOD");
+            return -1;
         }
     } else {
         if (sendMessage(queueId, PA_N, -1, -1) == -1) {
-            printf("Error during send SE NO\n");
+            handleError("Error during send SE NO");
             return -1;
         }
     }
@@ -725,12 +728,12 @@ int handlePA_RQ_GOOD(int queueId) {
     if (simulationRunning == 1) {
         /* The boat want to buy some goods */
         if (sendMessage(queueId, PA_Y, goodStockShareMemoryId, goodStockShareMemoryId) == -1) {
-                printf("Error during send RQ_GOOD errno: %d\n", errno);
-                return -1;
+            handleError("Error during send RQ_GOOD");
+            return -1;
         }
     } else {
         if (sendMessage(queueId, PA_N, -1, -1) == -1) {
-            printf("Error during send RQ NO\n");
+            handleError("Error during send RQ NO");
             return -1;
         }
     }
@@ -742,8 +745,8 @@ int handlePA_EOT(int writeQueueId) {
 
     /* The port acknowledge to end the transmission */
     if (sendMessage(writeQueueId, PA_EOT, 0, 0) == -1) {
-            printf("Error during send EOT errno: %d\n", errno);
-            return -1;
+        handleError("Error during send EOT");
+        return -1;
     }
 
     port.availableQuays++;
@@ -754,7 +757,7 @@ int handlePA_EOT(int writeQueueId) {
 int generateShareMemory(int sizeOfSegment) {
     int shareMemoryId = shmget(IPC_PRIVATE, sizeOfSegment, 0600);
     if (shareMemoryId == -1) {
-        printf("Error during creation of the shared memory\n");
+        handleErrno("shmget()");
         return -1;
     }
 
@@ -769,13 +772,13 @@ int generateSemaphore(int semKey) {
     sem_t *semaphore;
 
     if (sprintf(semaphoreKey, "%d", semKey) == -1) {
-        printf("Error during conversion of the pid for semaphore to a string\n");
+        handleError("Error during conversion of the pid for semaphore to a string");
         return -1;
     }   
 
     semaphore = sem_open(semaphoreKey, O_CREAT, 0600, 1);
     if (semaphore == SEM_FAILED) {
-        printf("Error on opening the semaphore\n");
+        handleErrno("sem_open()");
         return -1;
     }
 
@@ -783,25 +786,25 @@ int generateSemaphore(int semKey) {
 }
 
 int cleanup() {
-    printf("Port clean\n");
+    debug("Port clean");
 
     if (shmdt(configArr) == -1) {
-        printf("The conf arr detach failed\n");
+        handleErrno("shmdt()");
         return -1;
     }
 
     if (msgctl(port.msgQueuId, IPC_RMID, NULL) == -1) {
-        printf("PORT The queue failed to be closed\n");
+        handleErrno("msgctl()");
         return -1;
     }
 
     if (shmctl(goodStockShareMemoryId, IPC_RMID, NULL) == -1) {
-        printf("The shared memory failed to be closed\n");
+        handleErrno("msgctl()");
         return -1;
     }
 
     if (shmctl(goodRequestShareMemoryId, IPC_RMID, NULL) == -1) {
-        printf("The shared memory failed to be closed\n");
+        handleErrno("msgctl()");
         return -1;
     }
 
@@ -809,8 +812,8 @@ int cleanup() {
 }
 
 void safeExit(int exitNumber) {
+
     cleanup();
-    printf("Program %s exit with error %d\n", __FILE__, exitNumber);
     kill(getppid(), SIGINT);
     exit(exitNumber);
 }

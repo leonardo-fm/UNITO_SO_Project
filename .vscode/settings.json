@@ -14,6 +14,7 @@
         "models.h": "c",
         "stdio.h": "c",
         "utilities.h": "c",
-        "nave.h": "c"
+        "nave.h": "c",
+        "custommacro.h": "c"
     }
 }

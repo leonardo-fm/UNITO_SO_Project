@@ -34,7 +34,7 @@ int currentProcessId;
 
 void handle_master_stopProcess() { 
 
-    printf("\nStopping program...\n");
+    debug("\nStopping program...");
     killpg(getpid(), SIGINT);
     cleanup();
     exit(0);
@@ -51,7 +51,6 @@ int main() {
     /* ----- CONFIG ----- */
     configShareMemoryId = generateShareMemory(sizeof(int) * NUM_OF_SETTINGS);
     if (configShareMemoryId == -1) {
-        printf("Error during creation of shared memory for config\n");
         safeExit(1);
     }
 
@@ -73,19 +72,16 @@ int main() {
     goodAnalyzerShareMemoryId = generateShareMemory(
         sizeof(goodDailyDump) * configArr[SO_MERCI] * (configArr[SO_NAVI] + configArr[SO_PORTI]));
     if (goodAnalyzerShareMemoryId == -1) {
-        printf("Error during creation of shared memory for good analyzer\n");
         safeExit(4);
     }
 
     boatAnalyzerShareMemoryId = generateShareMemory(sizeof(boatDailyDump) * configArr[SO_NAVI]);
     if (boatAnalyzerShareMemoryId == -1) {
-        printf("Error during creation of shared memory for boat analyzer\n");
         safeExit(5);
     }
 
     portAnalyzerShareMemoryId = generateShareMemory(sizeof(portDailyDump) * configArr[SO_PORTI]);
     if (portAnalyzerShareMemoryId == -1) {
-        printf("Error during creation of shared memory for port analyzer\n");
         safeExit(6);
     }
 
@@ -103,7 +99,6 @@ int main() {
     /* ----- GOODS ----- */
     goodShareMemoryId = generateShareMemory(sizeof(Goods) * configArr[SO_MERCI]);
     if (goodShareMemoryId == -1) {
-        printf("Error during creation of shared memory for goods\n");
         safeExit(8);
     }
 
@@ -115,7 +110,6 @@ int main() {
     /* ----- PORTS ----- */
     portShareMemoryId = generateShareMemory(sizeof(Port) * configArr[SO_PORTI]);
     if (portShareMemoryId == -1) {
-        printf("Error during creation of shared memory for ports\n");
         safeExit(10);
     }
 
@@ -143,12 +137,10 @@ int main() {
 
     /* ----- START SIMULATION ----- */
     if (work() == -1) {
-        printf("Error during master work\n");
         safeExit(13);
     }
 
     if (cleanup() == -1) {
-        printf("Cleanup failed\n");
         safeExit(14);
     }
 
@@ -170,12 +162,12 @@ int checkForAnalizerToFinish() {
 
     int msgResponse = receiveMessage(analyzerReadingMsgQueue, &response, 0, 0);
     if (msgResponse == -1) {
-        printf("Error during waiting response from PA_FINISH\n");
+        handleError("Error during waiting response from PA_FINISH");
         return -1;
     }
 
     if (response.msg.data.action != PA_FINISH) {
-        printf("Wrong action response instead of PA_FINISH, get %d\n", response.msg.data.action);
+        handleError("Wrong action response instead of PA_FINISH");
         return -1;
     }
 
@@ -188,12 +180,12 @@ int waitForAnalizerToCollectData() {
 
     int msgResponse = receiveMessage(analyzerReadingMsgQueue, &response, 0, 0);
     if (msgResponse == -1) {
-        printf("Error during waiting response from PA_DATA_COL\n");
+        handleError("Error during waiting response from PA_DATA_COL");
         return -1;
     }
 
     if (response.msg.data.action != PA_DATA_COL) {
-        printf("Wrong action response instead of PA_DATA_COL, get %d\n", response.msg.data.action);
+        handleError("Wrong action response instead of PA_DATA_COL");
         return -1;
     }
 
@@ -220,19 +212,19 @@ int work() {
         simulationDays++;
 
         if (safeWait(1, 0l) == -1) {
-            printf("Error while waiting next day master\n");
+            handleError("Error while waiting next day master");
             return -1;
         }
         
         if (simulationDays < configArr[SO_DAYS]) {
 
             if (killpg(getpid(), SIGUSR2) == -1) {
-                printf("Error while sending SIGUSR2, errno: %d\n", errno);
+                handleErrno("killpg()");
                 return -1;
             }
 
             if (sendMessage(analyzerWritingMsgQueue, PA_NEW_DAY, -1, -1) == -1) {
-                printf("Error during sendig of the PA_NEW_DAY\n");
+                handleError("Error during sendig of the PA_NEW_DAY");
                 return -1;
             }
 
@@ -245,7 +237,7 @@ int work() {
     killpg(getpid(), SIGSYS); /*Si svegliano? essendo che i porti e navi stano aspettando un SIGCONT*/
 
     if (sendMessage(analyzerWritingMsgQueue, PA_NEW_DAY, -1, -1) == -1) {
-        printf("Error during sendig of the PA_NEW_DAY finish\n");
+        handleError("Error during sendig of the PA_NEW_DAY finish");
         return -1;
     }
 
@@ -257,7 +249,7 @@ int work() {
 int generateShareMemory(int sizeOfSegment) {
     int shareMemoryId = shmget(IPC_PRIVATE, sizeOfSegment, 0600);
     if (shareMemoryId == -1) {
-        printf("Error during creation of the shared memory\n");
+        handleErrno("shmget()");
         return -1;
     }
 
@@ -286,7 +278,7 @@ int generateSubProcesses(int nOfProcess, char *execFilePath, int includeProcedur
         char key[12];
     
         if (sprintf(key, "%d", arguments[i - includeProceduralId]) == -1) {
-            printf("Error during conversion of the argument %d° to a string\n", i);
+            handleError("Error during conversion of the argument to a string");
             return -1;
         }
 
@@ -306,7 +298,7 @@ int generateSubProcesses(int nOfProcess, char *execFilePath, int includeProcedur
             char key[12];
         
             if (sprintf(key, "%d", currentProcessId) == -1) {
-                printf("Error during conversion of the id to a string\n");
+                handleError("Error during conversion of the id to a string");
                 return -1;
             }
 
@@ -315,12 +307,12 @@ int generateSubProcesses(int nOfProcess, char *execFilePath, int includeProcedur
         }
 
         if (id == -1) {
-            printf("Error during fork of the file %s\n", execFilePath);
+            handleError("Error during fork of the file");
             return -1;
         }
         if (id == 0) {  
             if (execve(execFilePath, args, NULL) == -1) {
-                printf("Error during innesting of the file %s\n", execFilePath);
+                handleErrno("execve()");
                 return -1;
             }
         } 
@@ -335,11 +327,13 @@ int initializeGoods(int goodShareMemoryId) {
 
     /* Init of goods */
     if (generateGoods(goodShareMemoryId) == -1) {
+        handleError("Error while generating goods");
         return -1;
     }
 
     /* Init of semaphore */
     if (generateSemaphore() == -1) {
+        handleError("Error while generating semaphore");
         return -1;
     }
 
@@ -353,7 +347,7 @@ int generateGoods(int goodShareMemoryId) {
 
     Goods *arr = (Goods*) shmat(goodShareMemoryId, NULL, 0);
     if (arr == (void*) -1) {
-        printf("Error during good memory allocation\n");
+        handleErrno("shmat");
         return -1;
     }
 
@@ -369,7 +363,7 @@ int generateGoods(int goodShareMemoryId) {
     }
 
     if (shmdt(arr) == -1) {
-        printf("The init good arr detach failed\n");
+        handleErrno("shmdt()");
         return -1;
     }
 
@@ -384,18 +378,18 @@ int generateSemaphore() {
 
     char semaphoreKey[12];
     if (sprintf(semaphoreKey, "%d", getpid()) == -1) {
-        printf("Error during conversion of the pid for semaphore to a string\n");
+        handleError("Error during conversion of the pid for semaphore to a string");
         return -1;
     }   
 
     semaphore = sem_open(semaphoreKey, O_CREAT, 0600, 1);
     if (semaphore == SEM_FAILED) {
-        printf("Error on opening the semaphore\n");
+        handleErrno("sem_open()");
         return -1;
     }
 
     if (sem_close(semaphore) < 0) {
-        printf("Error on closing the semaphore\n");
+        handleErrno("sem_close()");
         return -1;
     }
 
@@ -403,25 +397,25 @@ int generateSemaphore() {
 }
 
 int cleanup() {
-    printf("Master clean\n");
+    debug("Master clean");
 
     if (shmdt(configArr) == -1) {
-        printf("The config detach failed\n");
+        handleErrno("shmdt()");
         return -1;
     }
 
     if (shmctl(configShareMemoryId, IPC_RMID, NULL) == -1) {
-        printf("The shared memory failed to be closed\n");
+        handleErrno("shmctl()");
         return -1;
     }
 
     if (shmctl(goodShareMemoryId, IPC_RMID, NULL) == -1) {
-        printf("The shared memory failed to be closed\n");
+        handleErrno("shmctl()");
         return -1;
     }
     
     if (shmctl(portShareMemoryId, IPC_RMID, NULL) == -1) {
-        printf("The shared memory failed to be closed\n");
+        handleErrno("shmctl()");
         return -1;
     }
 
@@ -429,8 +423,8 @@ int cleanup() {
 }
 
 void safeExit(int exitNumber) {
+
     cleanup();
-    printf("Program %s exit with error %d\n", __FILE__, exitNumber);
     killpg(getpid(), SIGINT);
     exit(exitNumber);
 }

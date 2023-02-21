@@ -5,6 +5,7 @@
 #include <errno.h>
 
 #include "models.h"
+#include "customMacro.h"
 
 /* Initialize some values for the program to work */
 void initializeEnvironment() {
@@ -60,7 +61,7 @@ int getRandomValue(int min, int max) {
 }
 
 int getSeconds(double timeInSeconds) {
-    double d, f;
+    double d;
     modf(timeInSeconds, &d);
     return d;
 }
@@ -92,7 +93,7 @@ int safeWait(int timeToSleepSec, long timeToSleepNs) {
     } while (sleepStatus == -1 && errno == EINTR);
     
     if (errno != EINTR && errno != 0) {
-        printf("Nano sleep system call failed errno: %d\n", errno);
+        handleErrno("nanosleep()");
         return -1;
     }
 

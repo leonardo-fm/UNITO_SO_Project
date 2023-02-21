@@ -7,6 +7,8 @@
 #include <sys/shm.h>
 
 #include "models.h"
+#include "customMacro.h"
+#include "config.h"
 
 /* Load the configuration file (config.txt) from the root directory of the project. */
 /* Return 0 if the configuration has been loaded succesfully, -1 if some errors occurred. */
@@ -19,7 +21,7 @@ int loadConfig(int configShareMemoryId) {
     FILE *filePointer;
     filePointer = fopen("config.txt", "r");
     if (filePointer == NULL) {
-        printf("loadingConfig | The file pointer of the config file is null\n");
+        handleError("The file pointer of the config file is null");
         return -1;
     }
 
@@ -33,7 +35,7 @@ int loadConfig(int configShareMemoryId) {
         char *p;
 
         if (fgets(fileLine, 150, filePointer) == NULL) {
-            printf("loadingConfig | The fgets() result is null\n");
+            handleErrno("fgets()");
             return -1;
         }
 
@@ -41,7 +43,7 @@ int loadConfig(int configShareMemoryId) {
         /* Adding the char to the pointer to remove the '=' */
         configValue += sizeof(char);
         if (configValue == NULL) {
-            printf("loadingConfig | Not found config value\n");
+            handleError("Not found config value");
             return -1;
         }
 
@@ -50,7 +52,7 @@ int loadConfig(int configShareMemoryId) {
     }
 
     if (checkConfigValues(arrConfig) == -1) {
-        printf("Check config failed\n");
+        handleError("Check config failed");
         return -1;
     }
 
@@ -62,12 +64,12 @@ int loadConfig(int configShareMemoryId) {
 int checkConfigValues(int *arrConfig) {
     
     if(arrConfig[SO_NAVI] < 1) {
-        printf("SO_NAVI must be >= 1\n");
+        handleError("SO_NAVI must be >= 1");
         return -1;
     }   
 
     if(arrConfig[SO_PORTI] < 4) {
-        printf("SO_PORTI must be >= 4\n");
+        handleError("SO_PORTI must be >= 4");
         return -1;
     }
 

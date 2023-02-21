@@ -1,6 +1,6 @@
 CFLAGS = -std=c89 -Wpedantic -Wall -Wextra
 SFLAGS = -D_POSIX_C_SOURCE=200809L -D_XOPEN_SOURCE=500
-LFLAGS = lib/config.c lib/utilities.c lib/msgPortProtocol.c
+LFLAGS = lib/config.c lib/utilities.c lib/msgPortProtocol.c lib/customMacro.h
 
 run: build
 	clear 

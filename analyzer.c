@@ -45,13 +45,13 @@ void handle_analyzer_simulation_signals(int signal) {
             simulationRunning = 0;
             break;
         default:
-            printf("Intercept a unhandled signal: %d\n", signal);
+            handleError("Intercept a unhandled signal");
             break;
     }
 }
 
 void handle_analyzer_stopProcess() {
-    printf("Stopping analyzer...\n");
+    debug("Stopping analyzer...");
     cleanup();
     exit(0);
 }
@@ -63,22 +63,22 @@ int main(int argx, char *argv[]) {
     initializeSingalsHandlers();
 
     if (initializeConfig(argv[0]) == -1) {
-        printf("Initialization of analyzer config failed\n");
+        handleError("Initialization of analyzer config failed");
         safeExit(1);
     }
 
     if (initializeAnalyzer(argv[1], argv[2], argv[3], argv[4], argv[5]) == -1) {
-        printf("Initialization of analyzer failed\n");
+        handleError("Initialization of analyzer failed");
         safeExit(2);
     }
 
     if (work() == -1) {
-        printf("Error during analyzer work\n");
+        handleError("Error during analyzer work");
         safeExit(3);
     }
 
     if (cleanup() == -1) {
-        printf("Analyzer cleanup failed\n");
+        handleError("Analyzer cleanup failed");
         safeExit(4);
     }
 
@@ -115,7 +115,7 @@ int initializeConfig(char *configShareMemoryIdString) {
     
     configArr = (int*) shmat(configShareMemoryId, NULL, 0);
     if (configArr == (void*) -1) {
-        printf("The config key as failed to be conveted in analyzer\n");
+        handleError("The config key as failed to be conveted in analyzer");
         return -1;
     }
 
@@ -144,7 +144,7 @@ int createLogFile() {
     FILE *filePointer;
 
     if (getcwd(currentWorkingDirectory, sizeof(currentWorkingDirectory)) == NULL) {
-        printf("Error retreavin working directory\n");
+        handleErrno("getcwd()");
         return -1;
     }
 
@@ -158,24 +158,24 @@ int createLogFile() {
             /* File does not exist, create it */
             filePointer = fopen(logPath, "w");
             if (filePointer == NULL) {
-                printf("Error creating file: %s\n", strerror(errno));
+                handleErrno("fopen() (create)");
                 return -1;
             }
         } else {
-            printf("Error opening file: %s\n", strerror(errno));
+            handleErrno("fopen()");
             return -1;
         }
     } else { 
         
         /* File exist, erase old data */
         if (ftruncate(fileno(filePointer), 0) != 0) {
-            printf("Error truncating file: %s\n", strerror(errno));
+            handleErrno("fileno()");
             return -1;
         }    
     }
 
     if (fclose(filePointer) != 0) {
-        printf("Error closing file: %s\n", strerror(errno));
+        handleErrno("fclose()");
         return -1;
     }
 
@@ -188,12 +188,12 @@ int waitForNewDay() {
 
     int msgResponse = receiveMessage(readingMsgQueue, &response, 0, 0);
     if (msgResponse == -1) {
-        printf("Error during waiting response from PA_NEW_DAY\n");
+        handleError("Error during waiting response from PA_NEW_DAY");
         return -1;
     }
 
     if (response.msg.data.action != PA_NEW_DAY) {
-        printf("Wrong action response instead of PA_NEW_DAY\n");
+        handleError("Wrong action response instead of PA_NEW_DAY");
         return -1;
     }
 
@@ -217,57 +217,57 @@ int work() {
 
     /* wait for simulation to start */
     if (waitForStart() != 0) {
-        printf("Error while waiting for start\n");
+        handleError("Error while waiting for start");
         return -1;
     }
 
     while (simulationRunning == 1)
     {
         if (waitForNewDay() != 0) {
-            printf("Error while waitnig for the new day by analyzer\n");
+            handleError("Error while waitnig for the new day by analyzer");
             return -1;
         }
 
         if (checkDataDump() == -1) {
-            printf("Error while check data dump\n");
+            handleError("Error while check data dump");
             return -1;
         }
 
         if (filePointer == NULL) {
-            printf("Error opening file\n");
+            handleError("Error opening file");
             return -1;
         }
 
         if (generateDailyHeader(filePointer) == -1) {
-            printf("Error while writing header\n");
+            handleError("Error while writing header");
             return -1;
         }
 
         if (generateDailyGoodReport(filePointer) == -1) {
-            printf("Error while writing good report\n");
+            handleError("Error while writing good report");
             return -1;
         }
 
         if (generateDailyBoatReport(filePointer) == -1) {
-            printf("Error while writing boat report\n");
+            handleError("Error while writing boat report");
             return -1;
         }
 
         if (generateDailyPortReport(filePointer) == -1) {
-            printf("Error while writing port report\n");
+            handleError("Error while writing port report");
             return -1;
         }
         
         currentDay++;
 
         if (sendMessage(writingMsgQueue, PA_FINISH, -1, -1) == -1) {
-            printf("Error during sendig of the PA_FINISH\n");
+            handleError("Error during sendig of the PA_FINISH");
             return -1;
         }
     }
 
     if (fclose(filePointer) != 0) {
-        printf("Error closing file: %s\n", strerror(errno));
+        handleErrno("flcose()");
         return -1;
     }
 
@@ -285,19 +285,19 @@ int checkDataDump() {
 
     goodArr = (goodDailyDump*) shmat(goodAnalyzerSharedMemoryId, NULL, 0);
     if (goodArr == (void*) -1) {
-        printf("Error during opening good analyzer share memory in analyzer\n");
+        handleErrno("shmat()");
         return -1;
     }
 
     boatArr = (boatDailyDump*) shmat(boatAnalyzerSharedMemoryId, NULL, 0);
     if (boatArr == (void*) -1) {
-        printf("Error during opening boat analyzer share memory in analyzer\n");
+        handleErrno("shmat()");
         return -1;
     }
 
     portArr = (portDailyDump*) shmat(portAnalyzerSharedMemoryId, NULL, 0);
     if (portArr == (void*) -1) {
-        printf("Error during opening port analyzer share memory in analyzer\n");
+        handleErrno("shmat()");
         return -1;
     }
 
@@ -307,7 +307,7 @@ int checkDataDump() {
     {
         long waitTimeInNs = getNanoSeconds(waitTimeInSeconds);
         if (safeWait(0, waitTimeInNs) == -1) {
-            printf("Error while waiting dump data in analyzer\n");
+            handleError("Error while waiting dump data in analyzer");
             return -1;
         }
 
@@ -318,7 +318,7 @@ int checkDataDump() {
         {
             /* Check if all goodId != 0 are set and not equal to 0 */
             if (i % goodSize != 0 && goodArr[i].goodId == 0) {
-                printf("Failed good check\n");
+                debug("Failed good check");
                 allDataCollected = 0;
                 break;
             }
@@ -329,7 +329,7 @@ int checkDataDump() {
             for (i = 0; i < configArr[SO_NAVI]; i++)
             {
                 if (boatArr[i].id == 0) {
-                    printf("Failed boat check\n");
+                    debug("Failed boat check");
                     allDataCollected = 0;
                     break;
                 }
@@ -341,7 +341,7 @@ int checkDataDump() {
             for (i = 1; i < configArr[SO_PORTI]; i++)
             {
                 if (portArr[i].id == 0) {
-                    printf("Failed port check\n");
+                    debug("Failed port check");
                     allDataCollected = 0;
                     break;
                 }
@@ -351,29 +351,29 @@ int checkDataDump() {
         waitTimeInSeconds += waitTimeInSeconds;
 
         if (waitTimeInSeconds > 1) {
-            printf("Wait time for dump data exeaded 1 second\n");
+            handleError("Wait time for dump data exeaded 1 second");
             return -1;
         }
 
     } while (allDataCollected != 1);
     
     if (shmdt(goodArr) == -1) {
-        printf("The arr good detach failed in analyzer\n");
+        handleErrno("shmdt()");
         return -1;
     }
 
     if (shmdt(boatArr) == -1) {
-        printf("The arr boat detach failed in analyzer\n");
+        handleErrno("shmdt()");
         return -1;
     }
 
     if (shmdt(portArr) == -1) {
-        printf("The arr port detach failed in analyzer\n");
+        handleErrno("shmdt()");
         return -1;
     }
 
     if (sendMessage(writingMsgQueue, PA_DATA_COL, -1, -1) == -1) {
-        printf("Error during sendig of the PA_DATA_COL\n");
+        handleError("Error during sendig of the PA_DATA_COL");
         return -1;
     }
 
@@ -389,7 +389,7 @@ int generateDailyHeader(FILE *filePointer) {
 
 int generateDailyGoodReport(FILE *filePointer) {
 
-    int *goodArr;
+    goodDailyDump *goodArr;
     int goodArrayLength = (configArr[SO_NAVI] + configArr[SO_PORTI]) * configArr[SO_MERCI];
 
     /* After extraction */
@@ -397,14 +397,14 @@ int generateDailyGoodReport(FILE *filePointer) {
     /* Cleaning of the memory after analyzing data */
     goodArr = (goodDailyDump*) shmat(goodAnalyzerSharedMemoryId, NULL, 0);
     if (goodArr == (void*) -1) {
-        printf("Error during opening good analyzer share memory in analyzer\n");
+        handleErrno("shmat()");
         return -1;
     }
 
     memset(goodArr, 0, goodArrayLength);
 
     if (shmdt(goodArr) == -1) {
-        printf("The arr good detach failed in analyzer\n");
+        handleErrno("shmdt()");
         return -1;
     }
 
@@ -420,14 +420,14 @@ int generateDailyBoatReport(FILE *filePointer) {
     /* Cleaning of the memory after analyzing data */
     boatArr = (boatDailyDump*) shmat(boatAnalyzerSharedMemoryId, NULL, 0);
     if (boatArr == (void*) -1) {
-        printf("Error during opening boat analyzer share memory in analyzer\n");
+        handleErrno("shmat()");
         return -1;
     }
 
     memset(boatArr, 0, configArr[SO_NAVI]);
 
     if (shmdt(boatArr) == -1) {
-        printf("The arr boat detach failed in analyzer\n");
+        handleErrno("shmdt()");
         return -1;
     }
 
@@ -443,14 +443,14 @@ int generateDailyPortReport(FILE *filePointer) {
     /* Cleaning of the memory after analyzing data */
     portArr = (portDailyDump*) shmat(portAnalyzerSharedMemoryId, NULL, 0);
     if (portArr == (void*) -1) {
-        printf("Error during opening port analyzer share memory in analyzer\n");
+        handleErrno("shmat()");
         return -1;
     }
 
     memset(portArr, 0, configArr[SO_PORTI]);
 
     if (shmdt(portArr) == -1) {
-        printf("The arr port detach failed in analyzer\n");
+        handleErrno("shmdt()");
         return -1;
     }
 
@@ -458,37 +458,37 @@ int generateDailyPortReport(FILE *filePointer) {
 }
 
 int cleanup() { 
-    printf("Analyzer clean\n");
+    debug("Analyzer clean");
 
     free(logPath);
 
     if (shmdt(configArr) == -1) {
-        printf("The config detach failed\n");
+        handleErrno("shmdt()");
         return -1;
     }
 
     if (shmctl(goodAnalyzerSharedMemoryId, IPC_RMID, NULL) == -1) {
-        printf("The good shared memory failed to be closed in analyzer\n");
+        handleErrno("shmctl()");
         return -1;
     }
     
     if (shmctl(boatAnalyzerSharedMemoryId, IPC_RMID, NULL) == -1) {
-        printf("The boat shared memory failed to be closed in analyzer\n");
+        handleErrno("shmctl()");
         return -1;
     }
 
     if (shmctl(portAnalyzerSharedMemoryId, IPC_RMID, NULL) == -1) {
-        printf("The port shared memory failed to be closed in analyzer\n");
+        handleErrno("shmctl()");
         return -1;
     }
 
     if (msgctl(writingMsgQueue, IPC_RMID, NULL) == -1) {
-        printf("The writing queue failed to be closed analyzer\n");
+        handleErrno("msgctl()");
         return -1;
     }
 
     if (msgctl(readingMsgQueue, IPC_RMID, NULL) == -1) {
-        printf("The reading queue failed to be closed analyzer\n");
+        handleErrno("msgctl()");
         return -1;
     }
 
@@ -496,8 +496,8 @@ int cleanup() {
 }
 
 void safeExit(int exitNumber) {
+
     cleanup();
-    printf("Program %s exit with error %d\n", __FILE__, exitNumber);
     kill(getppid(), SIGINT);
     exit(exitNumber);
 }
