@@ -382,7 +382,7 @@ int checkDataDump() {
 
 int generateDailyHeader(FILE *filePointer) {
 
-    fprintf(filePointer, "\nDay: %d\n", currentDay);
+    fprintf(filePointer, "Day: %d\n\n", currentDay);
 
     return 0;
 }
@@ -420,9 +420,9 @@ int generateDailyGoodReport(FILE *filePointer) {
     }
 
     /* Print data */
-    fprintf(filePointer, "%-10s%-10s%-10s%-10s%-10s%-10s\n", "GOOD_ID", "G_PORT", "G_BOAT", "G_DELIV", "G_E_PORT", "G_E_BOAT");
+    fprintf(filePointer, "%-12s%-12s%-12s%-12s%-12s%-12s\n", "GOOD_ID", "G_PORT", "G_BOAT", "G_DELIV", "G_E_PORT", "G_E_BOAT");
     for (i = 0; i < arraySize; i++) {
-        fprintf(filePointer, "%-10d%-10d%-10d%-10d%-10d%-10d\n", i, goodStatus[i][0], goodStatus[i][1], goodStatus[i][2],
+        fprintf(filePointer, "%-12d%-12d%-12d%-12d%-12d%-12d\n", i, goodStatus[i][0], goodStatus[i][1], goodStatus[i][2],
             goodStatus[i][3], goodStatus[i][4]);
     }
     fprintf(filePointer, "\n");
@@ -459,8 +459,8 @@ int generateDailyBoatReport(FILE *filePointer) {
     }
 
     /* Print data */
-    fprintf(filePointer, "%-10s%-10s%-10s\n", "BOAT_SEA", "BOAT_SEA_E", "BOAT_EXCH");
-    fprintf(filePointer, "%-10d%-10d%-10d\n", boatStatus[0], boatStatus[1], boatStatus[2]);
+    fprintf(filePointer, "%-12s%-12s%-12s\n", "BOAT_SEA", "BOAT_SEA_E", "BOAT_EXCH");
+    fprintf(filePointer, "%-12d%-12d%-12d\n", boatStatus[0], boatStatus[1], boatStatus[2]);
     fprintf(filePointer, "\n");
 
     /* Cleaning of the memory after analyzing data */
@@ -476,17 +476,26 @@ int generateDailyBoatReport(FILE *filePointer) {
 
 int generateDailyPortReport(FILE *filePointer) {
 
-    int *portArr;
-
-    /* After extraction */
-
-    /* Cleaning of the memory after analyzing data */
+    portDailyDump *portArr;
+    int i;
+    
     portArr = (portDailyDump*) shmat(portAnalyzerSharedMemoryId, NULL, 0);
     if (portArr == (void*) -1) {
         handleErrno("shmat()");
         return -1;
     }
 
+    /* Print data */
+    fprintf(filePointer, "%-12s%-12s%-12s%-12s%-12s\n", "PORT_ID", "G00D_STOCK", "GOOD_SOLD", "GOOD_RECIV", "QUAYS");
+    for (i = 0; i < configArr[SO_PORTI]; i++) {
+        char buffer[16];
+        snprintf(buffer, sizeof(buffer), "%d/%d", portArr[i].busyQuays, portArr[i].totalQuays);
+        fprintf(filePointer, "%-12d%-12d%-12d%-12d%-12s\n", portArr[i].id, portArr[i].totalGoodInStock, 
+            portArr[i].totalGoodSold, portArr[i].totalGoodRecived, buffer);
+    }
+    fprintf(filePointer, "\n");
+
+    /* Cleaning of the memory after analyzing data */
     memset(portArr, 0, configArr[SO_PORTI]);
 
     if (shmdt(portArr) == -1) {

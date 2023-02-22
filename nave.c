@@ -218,8 +218,6 @@ int work() {
                 return -1;
             }
 
-            boat.state = In_Port_Exchange;
-
             tradeStatus = openTrade();
             if (tradeStatus == -1) {
                 handleError("Error during trade");
@@ -455,6 +453,8 @@ int openTrade() {
 
         return 1;
     }
+    
+    boat.state = In_Port_Exchange;
     
     if (trade() == -1) {
         handleError("Error during trade");

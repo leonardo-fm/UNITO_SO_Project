@@ -1,51 +1,14 @@
-
 Day: 0
-GOOD_ID   G_PORT    G_BOAT    G_DELIV   G_E_PORT  G_E_BOAT  
-0         311756    1300      1050      0         0         
-1         8142      1275      1000      0         0         
-2         1556601   1175      1025      0         0         
-3         672900    975       800       0         0         
-4         98        759       667       0         0         
-5         152       504       420       0         0         
-6         172       672       483       0         0         
-7         228       361       266       0         0         
-8         9113      500       375       0         0         
-9         480       238       204       0         0         
 
-BOAT_SEA  BOAT_SEA_EBOAT_EXCH 
-38        120       92        
+GOOD_ID     G_PORT      G_BOAT      G_DELIV     G_E_PORT    G_E_BOAT    
+0           374340      610         620         0           0           
 
+BOAT_SEA    BOAT_SEA_E  BOAT_EXCH   
+57          934         9           
 
-Day: 1
-GOOD_ID   G_PORT    G_BOAT    G_DELIV   G_E_PORT  G_E_BOAT  
-0         309793    2688      2042      0         0         
-1         6192      2667      2092      0         0         
-2         1554655   2621      1847      0         0         
-3         670955    2545      1798      0         0         
-4         44        1133      642       0         0         
-5         72        748       501       0         0         
-6         80        959       628       0         0         
-7         102       648       491       0         0         
-8         7039      2374      1999      0         0         
-9         0         0         34        480       238       
-
-BOAT_SEA  BOAT_SEA_EBOAT_EXCH 
-141       6         103       
-
-
-Day: 2
-GOOD_ID   G_PORT    G_BOAT    G_DELIV   G_E_PORT  G_E_BOAT  
-0         308558    2101      1218      0         0         
-1         4647      2502      1474      0         0         
-2         1552716   2839      2039      0         0         
-3         0         0         322       670955    2545      
-4         0         0         69        44        1133      
-5         32        537       188       0         0         
-6         36        505       228       0         0         
-7         66        398       114       0         0         
-8         5108      2552      1906      0         0         
-9         0         0         0         0         0         
-
-BOAT_SEA  BOAT_SEA_EBOAT_EXCH 
-151       4         95        
+PORT_ID     G00D_STOCK  GOOD_SOLD   GOOD_RECIV  QUAYS       
+0           124760      10          230         3/4         
+1           124790      30          190         3/4         
+2           124790      0           200         3/4         
+3           0           10          0           0/4         
 
