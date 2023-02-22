@@ -395,14 +395,22 @@ int work() {
                 handleError("Error during reciving message from boat");
                 return -1;
             }
-            if (setupMsgStatus == 0 && setupMsg.msg.data.action == PA_SETUP) {
 
+            if (setupMsgStatus == 0 && setupMsg.msg.data.action == PA_SETUP) {
+                
+                int portHasAccepted = 0;
                 for (j = 0; j < maxQauys; j++) { 
                     if (queues[0][j] == -1) {
                         queues[0][j] = setupMsg.msg.data.data1;
                         queues[1][j] = setupMsg.msg.data.data2;
+                        portHasAccepted = 1;
                         break;
                     }
+                }
+
+                if (portHasAccepted == 0) {
+                    /* All the quays are full */
+                    sendMessage(setupMsg.msg.data.data2, PA_N, -1, -1);
                 }
             }
         }
@@ -869,6 +877,8 @@ int cleanup() {
 void safeExit(int exitNumber) {
 
     cleanup();
-    kill(getppid(), SIGINT);
+    if (simulationRunning == 1) {
+        kill(getppid(), SIGINT);
+    }
     exit(exitNumber);
 }

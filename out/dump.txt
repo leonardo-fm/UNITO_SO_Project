@@ -1,40 +1,130 @@
 
 Day: 0
-GOOD_ID     G_PORT      G_BOAT      G_DELIV     G_E_PORT    G_E_BOAT    
-0           198040      1700        1810        0           0           
+GOOD_ID   G_PORT    G_BOAT    G_DELIV   G_E_PORT  G_E_BOAT  
+0         1643253   13950     11500     0         0         
+1         0         0         0         0         0         
+2         403283    11825     9300      0         0         
+3         4644      4731      4511      0         0         
+4         9625      7975      7000      0         0         
+5         1302      6801      5544      0         0         
+6         0         0         0         0         0         
+7         436       7178      5640      0         0         
+8         56708     9275      6550      0         0         
+9         306789    7200      5175      0         0         
 
 Day: 1
-GOOD_ID     G_PORT      G_BOAT      G_DELIV     G_E_PORT    G_E_BOAT    
-0           194140      3760        3870        0           0           
+GOOD_ID   G_PORT    G_BOAT    G_DELIV   G_E_PORT  G_E_BOAT  
+0         0         0         2600      1643253   13950     
+1         0         0         0         0         0         
+2         380861    26302     23128     0         0         
+3         1212      6838      3785      0         0         
+4         0         200       1350      9425      7975      
+5         330       10021     7979      0         0         
+6         0         0         0         0         0         
+7         108       10810     8965      0         0         
+8         32295     26740     25603     0         0         
+9         281556    26416     24756     0         0         
 
 Day: 2
-GOOD_ID     G_PORT      G_BOAT      G_DELIV     G_E_PORT    G_E_BOAT    
-0           190490      3870        3650        0           0           
+GOOD_ID   G_PORT    G_BOAT    G_DELIV   G_E_PORT  G_E_BOAT  
+0         0         0         0         0         0         
+1         0         0         0         0         0         
+2         360547    26988     19592     0         0         
+3         456       4519      855       0         0         
+4         0         0         0         0         200       
+5         102       5408      1863      0         0         
+6         0         0         0         0         0         
+7         40        5477      1796      0         0         
+8         18292     20936     13843     0         0         
+9         261450    27667     20041     0         0         
 
 Day: 3
-GOOD_ID     G_PORT      G_BOAT      G_DELIV     G_E_PORT    G_E_BOAT    
-0           186660      4320        3830        0           0           
+GOOD_ID   G_PORT    G_BOAT    G_DELIV   G_E_PORT  G_E_BOAT  
+0         0         0         0         0         0         
+1         0         0         0         0         0         
+2         337701    26375     22937     0         0         
+3         132       2707      362       0         0         
+4         0         0         0         0         0         
+5         39        2609      578       0         0         
+6         0         0         0         0         0         
+7         12        2617      850       0         0         
+8         0         110       1736      18117     20611     
+9         237024    28052     24141     0         0         
 
 Day: 4
-GOOD_ID     G_PORT      G_BOAT      G_DELIV     G_E_PORT    G_E_BOAT    
-0           182990      3890        3640        0           0           
+GOOD_ID   G_PORT    G_BOAT    G_DELIV   G_E_PORT  G_E_BOAT  
+0         0         0         0         0         0         
+1         0         0         0         0         0         
+2         313471    28117     24195     0         0         
+3         48        1453      88        0         0         
+4         0         0         0         0         0         
+5         12        1251      217       0         0         
+6         0         0         0         0         0         
+7         3         1269      240       0         0         
+8         0         0         0         0         110       
+9         213805    27691     23304     0         0         
 
 Day: 5
-GOOD_ID     G_PORT      G_BOAT      G_DELIV     G_E_PORT    G_E_BOAT    
-0           179370      3800        3680        0           0           
+GOOD_ID   G_PORT    G_BOAT    G_DELIV   G_E_PORT  G_E_BOAT  
+0         0         0         0         0         0         
+1         0         0         0         0         0         
+2         288023    29941     24869     0         0         
+3         36        590       13        0         0         
+4         0         0         0         0         0         
+5         6         605       44        0         0         
+6         0         0         0         0         0         
+7         1         607       48        0         0         
+8         0         0         0         0         0         
+9         189216    28669     24650     0         0         
 
 Day: 6
-GOOD_ID     G_PORT      G_BOAT      G_DELIV     G_E_PORT    G_E_BOAT    
-0           175560      3860        3760        0           0           
+GOOD_ID   G_PORT    G_BOAT    G_DELIV   G_E_PORT  G_E_BOAT  
+0         0         0         0         0         0         
+1         0         0         0         0         0         
+2         264129    29051     24520     0         0         
+3         0         314       39        0         0         
+4         0         0         0         0         0         
+5         0         247       44        0         0         
+6         0         0         0         0         0         
+7         0         351       24        0         0         
+8         0         0         0         0         0         
+9         165045    29447     23689     0         0         
 
 Day: 7
-GOOD_ID     G_PORT      G_BOAT      G_DELIV     G_E_PORT    G_E_BOAT    
-0           171700      4400        3890        0           0           
+GOOD_ID   G_PORT    G_BOAT    G_DELIV   G_E_PORT  G_E_BOAT  
+0         0         0         0         0         0         
+1         0         0         0         0         0         
+2         238955    30664     24688     0         0         
+3         0         181       0         0         0         
+4         0         0         0         0         0         
+5         0         115       0         0         0         
+6         0         0         0         0         0         
+7         0         124       0         0         0         
+8         0         0         0         0         0         
+9         140869    30608     24487     0         0         
 
 Day: 8
-GOOD_ID     G_PORT      G_BOAT      G_DELIV     G_E_PORT    G_E_BOAT    
-0           168080      3950        3640        0           0           
+GOOD_ID   G_PORT    G_BOAT    G_DELIV   G_E_PORT  G_E_BOAT  
+0         0         0         0         0         0         
+1         0         0         0         0         0         
+2         215072    31556     24393     0         0         
+3         0         99        0         0         0         
+4         0         0         0         0         0         
+5         0         72        0         0         0         
+6         0         0         0         0         0         
+7         0         30        0         0         0         
+8         0         0         0         0         0         
+9         116993    30935     24008     0         0         
 
 Day: 9
-GOOD_ID     G_PORT      G_BOAT      G_DELIV     G_E_PORT    G_E_BOAT    
-0           164050      4410        3920        0           0           
+GOOD_ID   G_PORT    G_BOAT    G_DELIV   G_E_PORT  G_E_BOAT  
+0         0         0         0         0         0         
+1         0         0         0         0         0         
+2         189488    33909     25379     0         0         
+3         0         61        0         0         0         
+4         0         0         0         0         0         
+5         0         25        0         0         0         
+6         0         0         0         0         0         
+7         0         4         0         0         0         
+8         0         0         0         0         0         
+9         93083     31406     23288     0         0         

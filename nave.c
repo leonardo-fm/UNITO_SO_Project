@@ -855,6 +855,8 @@ int cleanup() {
 void safeExit(int exitNumber) {
 
     cleanup();
-    kill(getppid(), SIGINT);
+    if (simulationRunning == 1) {
+        kill(getppid(), SIGINT);
+    }
     exit(exitNumber);
 }
