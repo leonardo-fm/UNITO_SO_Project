@@ -206,7 +206,7 @@ int initializePortStruct(char *portIdString, char *portShareMemoryIdS) {
     } else {
         port.position = getRandomCoordinates(configArr[SO_LATO], configArr[SO_LATO]);
     }
-    port.quays = getRandomValue(4, configArr[SO_BANCHINE]);
+    port.quays = getRandomValue(1, configArr[SO_BANCHINE]);
     port.availableQuays = port.quays;
 
     shareMemoryId = strtol(portShareMemoryIdS, &p, 10);
@@ -332,11 +332,13 @@ int initializePortGoods(char *goodShareMemoryIdS) {
             /* Fill stock */
             arrStock[i].remaningDays = masterGoodArr[i].remaningDays;
             arrStock[i].loadInTon = masterGoodArr[i].loadInTon;
+            arrRequest[i].loadInTon = 0;
             arrStock[i].state = In_The_Port;
         } else {
             /* Fill request */
             arrRequest[i].remaningDays = masterGoodArr[i].remaningDays;
             arrRequest[i].loadInTon = masterGoodArr[i].loadInTon;
+            arrStock[i].loadInTon = 0;
             arrRequest[i].state = In_The_Port;
         }
 
@@ -747,17 +749,17 @@ int handlePA_SE_GOOD(int queueId) {
 
 int handlePA_SE_SUMMARY(int goodId, int exchangeQuantity) {
 
-    Goods *arrStock;
+    Goods *arrRequest;
 
-    arrStock = (Goods*) shmat(goodStockShareMemoryId, NULL, 0);
-    if (arrStock == (void*) -1) {
+    arrRequest = (Goods*) shmat(goodRequestShareMemoryId, NULL, 0);
+    if (arrRequest == (void*) -1) {
         handleErrno("shmat()");
         return -1;
     }
 
-    arrStock[goodId].dailyExchange += exchangeQuantity;
+    arrRequest[goodId].dailyExchange += exchangeQuantity;
 
-    if (shmdt(arrStock) == -1) {
+    if (shmdt(arrRequest) == -1) {
         handleErrno("shmdt()");
         return -1;
     }
@@ -785,17 +787,17 @@ int handlePA_RQ_GOOD(int queueId) {
 
 int handlePA_RQ_SUMMARY(int goodId, int exchangeQuantity) {
 
-    Goods *arrRequest;
+    Goods *arrStock;
 
-    arrRequest = (Goods*) shmat(goodRequestShareMemoryId, NULL, 0);
-    if (arrRequest == (void*) -1) {
+    arrStock = (Goods*) shmat(goodStockShareMemoryId, NULL, 0);
+    if (arrStock == (void*) -1) {
         handleErrno("shmat()");
         return -1;
     }
 
-    arrRequest[goodId].dailyExchange += exchangeQuantity;
+    arrStock[goodId].dailyExchange += exchangeQuantity;
 
-    if (shmdt(arrRequest) == -1) {
+    if (shmdt(arrStock) == -1) {
         handleErrno("shmdt()");
         return -1;
     }

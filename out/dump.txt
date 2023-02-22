@@ -1,14 +1,42 @@
 Day: 0
 
 GOOD_ID     G_PORT      G_BOAT      G_DELIV     G_E_PORT    G_E_BOAT    
-0           374340      610         620         0           0           
+0           374480      500         20          0           0           
 
 BOAT_SEA    BOAT_SEA_E  BOAT_EXCH   
-57          934         9           
+47          949         4           
 
 PORT_ID     G00D_STOCK  GOOD_SOLD   GOOD_RECIV  QUAYS       
-0           124760      10          230         3/4         
-1           124790      30          190         3/4         
-2           124790      0           200         3/4         
-3           0           10          0           0/4         
+0           0           0           20          0/1         
+1           124810      180         0           1/2         
+2           124840      150         0           1/2         
+3           124830      160         0           2/2         
+
+Day: 1
+
+GOOD_ID     G_PORT      G_BOAT      G_DELIV     G_E_PORT    G_E_BOAT    
+0           373880      1040        50          0           0           
+
+BOAT_SEA    BOAT_SEA_E  BOAT_EXCH   
+101         894         5           
+
+PORT_ID     G00D_STOCK  GOOD_SOLD   GOOD_RECIV  QUAYS       
+0           0           0           50          1/1         
+1           124610      200         0           1/2         
+2           124640      200         0           2/2         
+3           124630      200         0           1/2         
+
+Day: 2
+
+GOOD_ID     G_PORT      G_BOAT      G_DELIV     G_E_PORT    G_E_BOAT    
+0           373280      1540        110         0           0           
+
+BOAT_SEA    BOAT_SEA_E  BOAT_EXCH   
+151         845         4           
+
+PORT_ID     G00D_STOCK  GOOD_SOLD   GOOD_RECIV  QUAYS       
+0           0           0           110         0/1         
+1           124410      200         0           1/2         
+2           124440      200         0           2/2         
+3           124430      200         0           1/2         
 
