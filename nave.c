@@ -842,6 +842,14 @@ int getSpaceAvailableInTheHold() {
 
 int cleanup() {
 
+    if (simulationRunning == 1) {
+        msgctl(readingMsgQueue, IPC_RMID, NULL);
+    }
+
+    if (simulationRunning == 1) {
+        msgctl(writingMsgQueue, IPC_RMID, NULL);
+    }
+
     if (shmdt(configArr) == -1) {
         handleErrno("shmdt()");
         return -1;
