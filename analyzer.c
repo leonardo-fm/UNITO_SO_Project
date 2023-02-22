@@ -425,6 +425,7 @@ int generateDailyGoodReport(FILE *filePointer) {
         fprintf(filePointer, "%-10d%-10d%-10d%-10d%-10d%-10d\n", i, goodStatus[i][0], goodStatus[i][1], goodStatus[i][2],
             goodStatus[i][3], goodStatus[i][4]);
     }
+    fprintf(filePointer, "\n");
 
     /* Cleaning of the memory after analyzing data */
     memset(goodArr, 0, goodArrayLength);
@@ -441,17 +442,28 @@ int generateDailyGoodReport(FILE *filePointer) {
 
 int generateDailyBoatReport(FILE *filePointer) {
     
-    int *boatArr;
+    boatDailyDump *boatArr;
+    /* In_Sea = 0, In_Sea_Empty = 1, In_Port_Exchange = 2 */
+    int boatStatus[3] = {0};
+    int i;
 
-    /* After extraction */
-
-    /* Cleaning of the memory after analyzing data */
     boatArr = (boatDailyDump*) shmat(boatAnalyzerSharedMemoryId, NULL, 0);
     if (boatArr == (void*) -1) {
         handleErrno("shmat()");
         return -1;
     }
 
+    /* Aggregate data */
+    for (i = 0; i < configArr[SO_NAVI]; i++) {
+        boatStatus[boatArr[i].boatState]++;
+    }
+
+    /* Print data */
+    fprintf(filePointer, "%-10s%-10s%-10s\n", "BOAT_SEA", "BOAT_SEA_E", "BOAT_EXCH");
+    fprintf(filePointer, "%-10d%-10d%-10d\n", boatStatus[0], boatStatus[1], boatStatus[2]);
+    fprintf(filePointer, "\n");
+
+    /* Cleaning of the memory after analyzing data */
     memset(boatArr, 0, configArr[SO_NAVI]);
 
     if (shmdt(boatArr) == -1) {
