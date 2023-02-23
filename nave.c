@@ -27,6 +27,8 @@ int *configArr;
 int goodAnalyzerSharedMemoryId; 
 int boatAnalyzerSharedMemoryId; 
 
+int endGoodSharedMemoryId; 
+
 int portSharedMemoryId; 
 int currentMsgQueueId = -1;
 int currentPort = -1;
@@ -74,7 +76,8 @@ void handle_boat_stopProcess() {
     exit(0);
 }
 
-/* argv[0]=id | argv[1]=configsh | argv[2]=portsh | argv[3]=ganalizersh | argv[4]=banalyzersh | argv[5]=akish */
+/* argv[0]=id | argv[1]=configsh | argv[2]=portsh | argv[3]=ganalizersh | 
+    argv[4]=banalyzersh | argv[5]=akish | argv[6]=endanalyzershm */
 int main(int argx, char *argv[]) {
 
     (void) argx;
@@ -86,7 +89,7 @@ int main(int argx, char *argv[]) {
         safeExit(1);
     }
     
-    if (initializeBoat(argv[0], argv[2], argv[5]) == -1) {
+    if (initializeBoat(argv[0], argv[2], argv[5], argv[6]) == -1) {
         handleError("Initialization of boat failed");
         safeExit(2);
     }
@@ -144,7 +147,7 @@ int initializeConfig(char *configShareMemoryIdString, char *goodAnalyzerShareMem
     return 0;
 }
 
-int initializeBoat(char *boatIdS, char *portShareMemoryIdS, char *acknowledgeInitShareMemoryIdS) {
+int initializeBoat(char *boatIdS, char *portShareMemoryIdS, char *acknowledgeInitShareMemoryIdS, char *endGoodShareMemoryIdS) {
 
     int i = 0;
     char *p;
@@ -158,6 +161,7 @@ int initializeBoat(char *boatIdS, char *portShareMemoryIdS, char *acknowledgeIni
     boat.state = In_Sea_Empty;
 
     portSharedMemoryId = strtol(portShareMemoryIdS, &p, 10);
+    endGoodSharedMemoryId = strtol(endGoodShareMemoryIdS, &p, 10);
 
     /* Initialization of the hold */
     goodHold = malloc(sizeof(Goods) * configArr[SO_MERCI]);
@@ -322,14 +326,48 @@ int waitForNewDay() {
 int newDay() {
 
     int i;
+    goodEndDump *arrEndGoodDump;
+    sem_t *endGoodSemaphore;
+    char semaphoreKey[12];
+
+    arrEndGoodDump = (goodEndDump*) shmat(endGoodSharedMemoryId, NULL, 0);
+    if (arrEndGoodDump == (void*) -1) {
+        handleErrno("shmat()");
+        return -1;
+    }
+
+    if (sprintf(semaphoreKey, "%d", endGoodSharedMemoryId) == -1) {
+        handleError("Error during conversion of the pid for semaphore to a string");
+        return -1;
+    }
+
+    endGoodSemaphore = sem_open(semaphoreKey, O_EXCL, 0600, 1);
+    if (endGoodSemaphore == SEM_FAILED) {
+        handleErrno("sem_open()");
+        return -1;
+    }
 
     for (i = 0; i < configArr[SO_MERCI]; i++) {
         if(goodHold[i].remaningDays > 0) {
             goodHold[i].remaningDays--;
             if (goodHold[i].remaningDays == 0) {
                 goodHold[i].state = Expired_In_The_Boat;
+
+                sem_wait(endGoodSemaphore);
+                arrEndGoodDump[i].expiredInBoat += goodHold[i].loadInTon;
+                sem_post(endGoodSemaphore);
             }
         }
+    }
+
+    if (sem_close(endGoodSemaphore) < 0) {
+        handleErrno("sem_close()");
+        return -1;
+    }
+
+    if (shmdt(arrEndGoodDump) == -1) {
+        handleErrno("shmdt()");
+        return -1;
     }
 
     return 0;

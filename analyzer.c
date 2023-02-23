@@ -21,6 +21,7 @@ int *configArr;
 int goodAnalyzerSharedMemoryId;
 int boatAnalyzerSharedMemoryId; 
 int portAnalyzerSharedMemoryId;
+int endGoodSharedMemoryId; 
 
 int readingMsgQueue;
 int writingMsgQueue;
@@ -57,7 +58,8 @@ void handle_analyzer_stopProcess() {
     exit(0);
 }
 
-/* argv[0]=id | argv[1]=ganalizersh | argv[2]=banalyzersh | argv[3]=panalyzersh | argv[4]=wmsgq | argv[5]=rmsgq */
+/* argv[0]=id | argv[1]=ganalizersh | argv[2]=banalyzersh | argv[3]=panalyzersh | 
+    argv[4]=wmsgq | argv[5]=rmsgq | argv[6]=endanalyzershm */
 int main(int argx, char *argv[]) {
 
     (void) argx;
@@ -68,7 +70,7 @@ int main(int argx, char *argv[]) {
         safeExit(1);
     }
 
-    if (initializeAnalyzer(argv[1], argv[2], argv[3], argv[4], argv[5]) == -1) {
+    if (initializeAnalyzer(argv[1], argv[2], argv[3], argv[4], argv[5], argv[6]) == -1) {
         handleError("Initialization of analyzer failed");
         safeExit(2);
     }
@@ -124,13 +126,14 @@ int initializeConfig(char *configShareMemoryIdString) {
 }
 
 int initializeAnalyzer(char *goodAnalyzerShareMemoryIdString, char *boatAnalyzerShareMemoryIdString, 
-    char *portAnalyzerShareMemoryIdString, char *wmsgq, char *rmsgq) {
+    char *portAnalyzerShareMemoryIdString, char *wmsgq, char *rmsgq, char *endGoodShareMemoryIdString) {
 
     char *p;
 
     goodAnalyzerSharedMemoryId = strtol(goodAnalyzerShareMemoryIdString, &p, 10);
     boatAnalyzerSharedMemoryId = strtol(boatAnalyzerShareMemoryIdString, &p, 10);
     portAnalyzerSharedMemoryId = strtol(portAnalyzerShareMemoryIdString, &p, 10);
+    endGoodSharedMemoryId = strtol(endGoodShareMemoryIdString, &p, 10);
 
     writingMsgQueue = strtol(wmsgq, &p, 10);
     readingMsgQueue = strtol(rmsgq, &p, 10);
@@ -222,6 +225,11 @@ int work() {
         return -1;
     }
 
+    if (filePointer == NULL) {
+        handleError("Error opening file");
+        return -1;
+    }
+
     while (simulationRunning == 1)
     {
         if (waitForNewDay() != 0) {
@@ -239,28 +247,8 @@ int work() {
             break;
         }
 
-        if (filePointer == NULL) {
-            handleError("Error opening file");
-            return -1;
-        }
-
-        if (generateDailyHeader(filePointer) == -1) {
-            handleError("Error while writing header");
-            return -1;
-        }
-
-        if (generateDailyGoodReport(filePointer) == -1) {
-            handleError("Error while writing good report");
-            return -1;
-        }
-
-        if (generateDailyBoatReport(filePointer) == -1) {
-            handleError("Error while writing boat report");
-            return -1;
-        }
-
-        if (generateDailyPortReport(filePointer) == -1) {
-            handleError("Error while writing port report");
+        if (generateDailyDump(filePointer) == -1) {
+            handleError("Error while daily dump");
             return -1;
         }
         
@@ -270,6 +258,11 @@ int work() {
             handleError("Error during sendig of the PA_FINISH");
             return -1;
         }
+    }
+
+    if (generateEndDump(filePointer) == -1) {
+        handleError("Error while end dump");
+        return -1;
     }
 
     if (fclose(filePointer) != 0) {
@@ -380,6 +373,31 @@ int checkDataDump() {
 
     if (sendMessage(writingMsgQueue, PA_DATA_COL, -1, -1) == -1) {
         handleError("Error during sendig of the PA_DATA_COL");
+        return -1;
+    }
+
+    return 0;
+}
+
+int generateDailyDump(FILE *filePointer) {
+
+    if (generateDailyHeader(filePointer) == -1) {
+        handleError("Error while writing header");
+        return -1;
+    }
+
+    if (generateDailyGoodReport(filePointer) == -1) {
+        handleError("Error while writing good report");
+        return -1;
+    }
+
+    if (generateDailyBoatReport(filePointer) == -1) {
+        handleError("Error while writing boat report");
+        return -1;
+    }
+
+    if (generateDailyPortReport(filePointer) == -1) {
+        handleError("Error while writing port report");
         return -1;
     }
 
@@ -527,6 +545,70 @@ int generateDailyPortReport(FILE *filePointer) {
     return 0;
 }
 
+int generateEndDump(FILE *filePointer) {
+
+    if (generateEndHeader(filePointer) == -1) {
+        handleError("Error while writing header");
+        return -1;
+    }
+
+    if (generateDailyGoodReport(filePointer) == -1) {
+        handleError("Error while writing good report");
+        return -1;
+    }
+
+    if (generateDailyBoatReport(filePointer) == -1) {
+        handleError("Error while writing boat report");
+        return -1;
+    }
+
+    if (generateDailyPortReport(filePointer) == -1) {
+        handleError("Error while writing port report");
+        return -1;
+    }
+
+    if (generateEndGoodReport(filePointer) == -1) {
+        handleError("Error while writing end good report");
+        return -1;
+    }
+    
+    return 0;
+}
+
+int generateEndHeader(FILE *filePointer) {
+
+    fprintf(filePointer, "End of simulation\n\n");
+
+    return 0;
+}
+
+int generateEndGoodReport(FILE *filePointer) {
+
+    goodEndDump *goodEndArr;
+    int i;    
+
+    goodEndArr = (goodEndDump*) shmat(endGoodSharedMemoryId, NULL, 0);
+    if (goodEndArr == (void*) -1) {
+        handleErrno("shmat()");
+        return -1;
+    }
+
+    /* Print data */
+    fprintf(filePointer, "%-12s%-12s%-12s%-12s%-12s%-12s\n", "GOOD_ID", "INIT_TOTAL", "IN_PORT", "E_IN_PORT", "E_IN_BOAT", "EXCHANGED");
+    for (i = 0; i < configArr[SO_MERCI]; i++) {
+        fprintf(filePointer, "%-12d%-12d%-12d%-12d%-12d%-12d\n", i, goodEndArr[i].totalInitNumber, goodEndArr[i].inPort,
+            goodEndArr[i].expiredInPort, goodEndArr[i].expiredInBoat, goodEndArr[i].exchanged);
+    }
+    fprintf(filePointer, "\n");
+
+    if (shmdt(goodEndArr) == -1) {
+        handleErrno("shmdt()");
+        return -1;
+    }
+
+    return 0;
+}
+
 int cleanup() { 
 
     free(logPath);
@@ -547,6 +629,11 @@ int cleanup() {
     }
 
     if (shmctl(portAnalyzerSharedMemoryId, IPC_RMID, NULL) == -1) {
+        handleErrno("shmctl()");
+        return -1;
+    }
+
+    if (shmctl(endGoodSharedMemoryId, IPC_RMID, NULL) == -1) {
         handleErrno("shmctl()");
         return -1;
     }

@@ -26,6 +26,8 @@ int acknowledgeInitShareMemoryId;
 int boatAnalyzerShareMemoryId;
 int portAnalyzerShareMemoryId;
 
+int endGoodAnalyzerShareMemoryId;
+
 int analyzerReadingMsgQueue;
 int analyzerWritingMsgQueue;
 
@@ -44,9 +46,9 @@ void handle_master_stopProcess() {
 
 int main() {
 
-    int analyzerArgs[6];
-    int portArgs[6];
-    int boatArgs[5];
+    int analyzerArgs[7];
+    int portArgs[7];
+    int boatArgs[6];
 
     setpgid(getpid(), getpid());
 
@@ -87,13 +89,24 @@ int main() {
         safeExit(6);
     }
 
+    endGoodAnalyzerShareMemoryId = generateShareMemory(sizeof(goodEndDump) * configArr[SO_MERCI]);
+    if (endGoodAnalyzerShareMemoryId == -1) {
+        safeExit(17);
+    }
+
+    if (generateSemaphore(endGoodAnalyzerShareMemoryId) == -1) {
+        handleError("Error during creation of semaphore for goods end dump");
+        safeExit(18);
+    }
+
     analyzerArgs[0] = configShareMemoryId;
     analyzerArgs[1] = goodAnalyzerShareMemoryId;
     analyzerArgs[2] = boatAnalyzerShareMemoryId;
     analyzerArgs[3] = portAnalyzerShareMemoryId;
     analyzerArgs[4] = analyzerReadingMsgQueue;
     analyzerArgs[5] = analyzerWritingMsgQueue;
-    if (generateSubProcesses(1, "./bin/analyzer", 0, analyzerArgs, 6) == -1) {
+    analyzerArgs[6] = endGoodAnalyzerShareMemoryId;
+    if (generateSubProcesses(1, "./bin/analyzer", 0, analyzerArgs, 7) == -1) {
         safeExit(7);
     }
 
@@ -128,7 +141,8 @@ int main() {
     portArgs[3] = goodAnalyzerShareMemoryId;
     portArgs[4] = portAnalyzerShareMemoryId;
     portArgs[5] = acknowledgeInitShareMemoryId;
-    if (generateSubProcesses(configArr[SO_PORTI], "./bin/porto", 1, portArgs, 6) == -1) {
+    portArgs[6] = endGoodAnalyzerShareMemoryId;
+    if (generateSubProcesses(configArr[SO_PORTI], "./bin/porto", 1, portArgs, 7) == -1) {
         safeExit(12);
     }
 
@@ -139,7 +153,8 @@ int main() {
     boatArgs[2] = goodAnalyzerShareMemoryId;
     boatArgs[3] = boatAnalyzerShareMemoryId;
     boatArgs[4] = acknowledgeInitShareMemoryId;
-    if (generateSubProcesses(configArr[SO_NAVI], "./bin/nave", 1, boatArgs, 5) == -1) {
+    boatArgs[5] = endGoodAnalyzerShareMemoryId;
+    if (generateSubProcesses(configArr[SO_NAVI], "./bin/nave", 1, boatArgs, 6) == -1) {
         safeExit(13);
     }
 
@@ -350,6 +365,27 @@ int generateShareMemory(int sizeOfSegment) {
     }
 
     return shareMemoryId;
+}
+
+/* Generate a semaphore */
+/* https://stackoverflow.com/questions/32205396/share-posix-semaphore-among-multiple-processes */
+int generateSemaphore(int semKey) {
+
+    char semaphoreKey[12];
+    sem_t *semaphore;
+
+    if (sprintf(semaphoreKey, "%d", semKey) == -1) {
+        handleError("Error during conversion of the pid for semaphore to a string");
+        return -1;
+    }   
+
+    semaphore = sem_open(semaphoreKey, O_CREAT, 0600, 1);
+    if (semaphore == SEM_FAILED) {
+        handleErrno("sem_open()");
+        return -1;
+    }
+
+    return 0;
 }
 
 /* Generate processes by forking master and using execve */

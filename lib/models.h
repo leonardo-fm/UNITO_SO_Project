@@ -97,3 +97,11 @@ typedef struct {
     int busyQuays;
     int totalQuays;
 } portDailyDump;
+
+typedef struct {
+    int totalInitNumber;
+    int inPort;
+    int expiredInPort;
+    int expiredInBoat;
+    int exchanged;
+} goodEndDump;
