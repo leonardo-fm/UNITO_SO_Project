@@ -774,7 +774,7 @@ int buyGoods() {
                 goodArr[i].loadInTon -= availableSpace;
                 goodHold[i].loadInTon += availableSpace;
             } else {
-                exchange = availableSpace - goodArr[i].loadInTon;
+                exchange = goodArr[i].loadInTon;
                 goodArr[i].loadInTon = 0;
                 goodHold[i].loadInTon += exchange;
             }
