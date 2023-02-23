@@ -1,3 +1,4 @@
-bin/* 
-log/*
-out/*
+# Folders
+bin/
+log/
+out/
