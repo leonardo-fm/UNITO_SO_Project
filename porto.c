@@ -546,7 +546,7 @@ int freePendingMsgs() {
 }
 
 int dumpData() {
-    int i, totalGoodInStock, goodReferenceId, totalDailyGoodsSold, totalDailyGoodsRecived;
+    int i, totalGoodInStock, totalGoodRequested, goodReferenceId, totalDailyGoodsSold, totalDailyGoodsRecived;
     Goods *arrStock, *arrRequest;
 
     goodDailyDump *goodArr;
@@ -569,11 +569,15 @@ int dumpData() {
 
     /* Init data */
     totalGoodInStock = 0;
+    totalGoodRequested = 0;
     totalDailyGoodsSold = 0;
     totalDailyGoodsRecived = 0;
     for (i = 0; i < configArr[SO_MERCI]; i++) {
         if(arrStock[i].state != Expired_In_The_Port) {
             totalGoodInStock += arrStock[i].loadInTon;
+        }
+        if(arrRequest[i].state != Expired_In_The_Port) {
+            totalGoodRequested += arrRequest[i].loadInTon;
         }
         
         totalDailyGoodsSold += arrStock[i].dailyExchange;        
@@ -623,6 +627,7 @@ int dumpData() {
 
     pdd.id = port.id;
     pdd.totalGoodInStock = totalGoodInStock;
+    pdd.totalGoodRequested = totalGoodRequested;
     pdd.totalGoodRecived = totalDailyGoodsRecived;
     pdd.totalGoodSold = totalDailyGoodsSold;
     pdd.totalQuays = port.quays;

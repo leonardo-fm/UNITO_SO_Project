@@ -4,11 +4,17 @@ CDFLAGS = -DDEBUG
 SFLAGS = -D_POSIX_C_SOURCE=200809L -D_XOPEN_SOURCE=500
 LFLAGS = lib/config.c lib/utilities.c lib/msgPortProtocol.c lib/customMacro.h
 
+LOG_FILE := log/log_$(shell date +%Y%m%d%H%M%S).txt
+
 # RELEASE section
 
 run: build
 	clear 
 	./bin/master
+
+run-l: build
+	clear 
+	./bin/master > $(LOG_FILE)
 
 build: master nave porto analyzer
 
@@ -29,6 +35,10 @@ analyzer: analyzer.c
 debug: build-debug
 	clear 
 	./bin/master
+
+debug-l: build-debug
+	clear 
+	./bin/master > $(LOG_FILE)
 
 build-debug: master_d nave_d porto_d analyzer_d
 

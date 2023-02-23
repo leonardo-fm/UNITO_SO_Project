@@ -32,6 +32,7 @@ int analyzerWritingMsgQueue;
 int NUM_OF_SETTINGS = 13;
 int *configArr;
 int currentProcessId;
+int simulationFinishedEarly = 0;
 
 void handle_master_stopProcess() { 
 
@@ -181,9 +182,18 @@ int checkForAnalizerToFinish() {
         return -1;
     }
 
-    if (response.msg.data.action != PA_FINISH) {
-        handleError("Wrong action response instead of PA_FINISH");
-        return -1;
+    switch (response.msg.data.action)
+    {
+        case PA_FINISH:
+            break;
+        case PA_EOS_GSR:
+            printf("No more request or in stock of goods\n");
+            simulationFinishedEarly = 1;
+            return checkForAnalizerToFinish();
+            break;
+        default:
+            handleError("Wrong action response instead of PA_FINISH");
+            return -1;
     }
 
     return 0;
@@ -265,14 +275,9 @@ int work() {
 
     killpg(getpid(), SIGUSR1);
 
-    while (simulationDays < configArr[SO_DAYS])
+    while (simulationDays < configArr[SO_DAYS] && simulationFinishedEarly == 0)
     {
         char buffer[128];
-
-        /* Salta il primo giorno */
-        if (simulationDays > 0) {
-            checkForAnalizerToFinish();
-        }
 
         snprintf(buffer, sizeof(buffer), "Day number %d", simulationDays);
         printConsole(buffer);
@@ -283,8 +288,14 @@ int work() {
             handleError("Error while waiting next day master");
             return -1;
         }
+
+        /* Salta il primo giorno */
+        if (simulationDays > 1) {
+
+            checkForAnalizerToFinish();
+        }
         
-        if (simulationDays < configArr[SO_DAYS]) {
+        if (simulationDays < configArr[SO_DAYS] && simulationFinishedEarly == 0) {
 
             if (killpg(getpid(), SIGUSR2) == -1) {
                 handleErrno("killpg()");
@@ -298,7 +309,9 @@ int work() {
 
             waitForAnalizerToCollectData();
 
-            killpg(getpid(), SIGCONT);
+            if (simulationFinishedEarly == 0) {
+                killpg(getpid(), SIGCONT);
+            }
         }
     }
 

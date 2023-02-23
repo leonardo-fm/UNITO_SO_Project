@@ -91,6 +91,7 @@ typedef struct {
 typedef struct {
     int id;
     int totalGoodInStock;
+    int totalGoodRequested;
     int totalGoodSold;
     int totalGoodRecived;
     int busyQuays;

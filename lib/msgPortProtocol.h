@@ -10,7 +10,8 @@ typedef enum {
     PA_EOT,         /* End of trasmission */ 
     PA_NEW_DAY,     /* New day for analyzer */
     PA_DATA_COL,    /* Data collected from boats and ports */    
-    PA_FINISH       /* Analyzer finished analyzing data */
+    PA_FINISH,      /* Analyzer finished analyzing data */
+    PA_EOS_GSR      /* End of simulation because no more goo in stock or requested */
 } ProtocolActions;
 
 typedef struct {

@@ -29,6 +29,7 @@ char *logPath;
 
 int currentDay = 0;
 int simulationRunning = 1;
+int simulationFinishedEarly = 0;
 
 void handle_analyzer_simulation_signals(int signal) {
 
@@ -231,6 +232,11 @@ int work() {
         if (checkDataDump() == -1) {
             handleError("Error while check data dump");
             return -1;
+        }
+
+        /* Check all entetyes has write in the dump shm befoure closing all */
+        if (simulationFinishedEarly == 1) {
+            break;
         }
 
         if (filePointer == NULL) {
@@ -477,7 +483,7 @@ int generateDailyBoatReport(FILE *filePointer) {
 int generateDailyPortReport(FILE *filePointer) {
 
     portDailyDump *portArr;
-    int i;
+    int i, inStock, requested;
     
     portArr = (portDailyDump*) shmat(portAnalyzerSharedMemoryId, NULL, 0);
     if (portArr == (void*) -1) {
@@ -486,14 +492,29 @@ int generateDailyPortReport(FILE *filePointer) {
     }
 
     /* Print data */
-    fprintf(filePointer, "%-12s%-12s%-12s%-12s%-12s\n", "PORT_ID", "G00D_STOCK", "GOOD_SOLD", "GOOD_RECIV", "QUAYS");
+    fprintf(filePointer, "%-12s%-12s%-12s%-12s%-12s%-12s\n", "PORT_ID", "G00D_STOCK", "GOOD_REQ", "GOOD_SOLD", "GOOD_RECIV", "QUAYS");
     for (i = 0; i < configArr[SO_PORTI]; i++) {
         char buffer[16];
         snprintf(buffer, sizeof(buffer), "%d/%d", portArr[i].busyQuays, portArr[i].totalQuays);
-        fprintf(filePointer, "%-12d%-12d%-12d%-12d%-12s\n", portArr[i].id, portArr[i].totalGoodInStock, 
-            portArr[i].totalGoodSold, portArr[i].totalGoodRecived, buffer);
+        fprintf(filePointer, "%-12d%-12d%-12d%-12d%-12d%-12s\n", portArr[i].id, portArr[i].totalGoodInStock, 
+            portArr[i].totalGoodRequested, portArr[i].totalGoodSold, portArr[i].totalGoodRecived, buffer);
     }
     fprintf(filePointer, "\n");
+
+    /* Check for possible ending of the simulation */
+    inStock = 0;
+    requested = 0;
+    for (i = 0; i < configArr[SO_PORTI]; i++) {
+
+        inStock += portArr[i].totalGoodInStock;
+        requested += portArr[i].totalGoodRequested;
+    }
+
+    if (inStock == 0 || requested == 0) {
+        sendMessage(writingMsgQueue, PA_EOS_GSR, -1, -1);
+        simulationFinishedEarly = 1;
+        debug("Analyzer sent PA_EOS_GSR to master");
+    }
 
     /* Cleaning of the memory after analyzing data */
     memset(portArr, 0, configArr[SO_PORTI]);
