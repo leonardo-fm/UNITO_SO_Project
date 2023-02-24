@@ -35,6 +35,9 @@ int currentPort = -1;
 int readingMsgQueue = -1;
 int writingMsgQueue = -1;
 
+/* No value equal to -1, o to n is the good id is selling */
+int isSelling = -1;
+
 Boat boat;
 Goods *goodHold;
 
@@ -350,7 +353,8 @@ int newDay() {
     for (i = 0; i < configArr[SO_MERCI]; i++) {
         if(goodHold[i].remaningDays > 0) {
             goodHold[i].remaningDays--;
-            if (goodHold[i].remaningDays == 0) {
+            /* Avoid adding sold expired good */
+            if (goodHold[i].remaningDays == 0 && isSelling != i) {
                 goodHold[i].state = Expired_In_The_Boat;
 
                 sem_wait(endGoodSemaphore);
@@ -679,6 +683,7 @@ int sellGoods() {
             }
             
             sem_wait(semaphore);
+            isSelling = i;
 
             /* If x >= 0 OK, x < 0 not enought good to sell */
             if (goodArr[i].loadInTon - goodHold[i].loadInTon >= 0) {
@@ -702,6 +707,7 @@ int sellGoods() {
                 goodArr[i].state = In_The_Port;
             }
 
+            isSelling = -1;
             sem_post(semaphore);
 
             loadTonPerDay = (double) exchange / configArr[SO_LOADSPEED];

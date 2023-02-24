@@ -16,5 +16,6 @@ int generateDailyPortReport(FILE *filePointer);
 int generateEndDump(FILE *filePointer);
 int generateEndHeader(FILE *filePointer);
 int generateEndGoodReport(FILE *filePointer);
+int generateEndPortStat(FILE *filePointer);
 int cleanup();
 void safeExit(int exitNumber);

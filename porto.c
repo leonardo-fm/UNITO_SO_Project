@@ -791,6 +791,7 @@ int newDay() {
         return -1;
     }
 
+    /* TODO nel mentre che avviene uno scambio con una nave, se la merce scade allora la nave la conta come da se e anche il porto */
     for (i = 0; i < configArr[SO_MERCI]; i++) {
         if(arrStock[i].remaningDays > 0) {
             arrStock[i].remaningDays--;

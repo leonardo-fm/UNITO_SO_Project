@@ -22,6 +22,7 @@ int goodAnalyzerSharedMemoryId;
 int boatAnalyzerSharedMemoryId; 
 int portAnalyzerSharedMemoryId;
 int endGoodSharedMemoryId; 
+int *endPortSharedMemory; 
 
 int readingMsgQueue;
 int writingMsgQueue;
@@ -129,6 +130,7 @@ int initializeAnalyzer(char *goodAnalyzerShareMemoryIdString, char *boatAnalyzer
     char *portAnalyzerShareMemoryIdString, char *wmsgq, char *rmsgq, char *endGoodShareMemoryIdString) {
 
     char *p;
+    int size = sizeof(int) * configArr[SO_PORTI] * 2;
 
     goodAnalyzerSharedMemoryId = strtol(goodAnalyzerShareMemoryIdString, &p, 10);
     boatAnalyzerSharedMemoryId = strtol(boatAnalyzerShareMemoryIdString, &p, 10);
@@ -137,6 +139,9 @@ int initializeAnalyzer(char *goodAnalyzerShareMemoryIdString, char *boatAnalyzer
 
     writingMsgQueue = strtol(wmsgq, &p, 10);
     readingMsgQueue = strtol(rmsgq, &p, 10);
+
+    endPortSharedMemory = (int *) malloc(size);
+    memset(endPortSharedMemory, 0, size);
 
     createLogFile();
 
@@ -513,9 +518,16 @@ int generateDailyPortReport(FILE *filePointer) {
     fprintf(filePointer, "%-12s%-12s%-12s%-12s%-12s%-12s\n", "PORT_ID", "G00D_STOCK", "GOOD_REQ", "GOOD_SOLD", "GOOD_RECIV", "QUAYS");
     for (i = 0; i < configArr[SO_PORTI]; i++) {
         char buffer[16];
+        int currentId;
+
         snprintf(buffer, sizeof(buffer), "%d/%d", portArr[i].busyQuays, portArr[i].totalQuays);
         fprintf(filePointer, "%-12d%-12d%-12d%-12d%-12d%-12s\n", portArr[i].id, portArr[i].totalGoodInStock, 
             portArr[i].totalGoodRequested, portArr[i].totalGoodSold, portArr[i].totalGoodRecived, buffer);
+
+        /* Collect data for the best port at the end dump */
+        currentId = 2 * i;
+        endPortSharedMemory[currentId] += portArr[i].totalGoodSold;
+        endPortSharedMemory[currentId + 1] += portArr[i].totalGoodRecived;
     }
     fprintf(filePointer, "\n");
 
@@ -571,6 +583,11 @@ int generateEndDump(FILE *filePointer) {
         handleError("Error while writing end good report");
         return -1;
     }
+
+    if (generateEndPortStat(filePointer) == -1) {
+        handleError("Error while writing end port report");
+        return -1;
+    }
     
     return 0;
 }
@@ -609,9 +626,33 @@ int generateEndGoodReport(FILE *filePointer) {
     return 0;
 }
 
+int generateEndPortStat(FILE *filePointer) {
+
+    int i, portIdSold = 0, totSold = 0, portIdReq = 0, totReq = 0;
+
+    for (i = 0; i < configArr[SO_PORTI]; i++) {
+        int currentId = i * 2;
+
+        if (endPortSharedMemory[currentId] > totSold) {
+            totSold = endPortSharedMemory[currentId];
+            portIdSold = i;
+        }
+        if (endPortSharedMemory[currentId + 1] > totReq) {
+            totReq = endPortSharedMemory[currentId + 1];
+            portIdReq = i;
+        }
+    }
+
+    fprintf(filePointer, "The port %d have sold %d ton of goods\n", portIdSold, totSold);
+    fprintf(filePointer, "The port %d have requested %d ton of goods\n", portIdReq, totReq);
+
+    return 0;
+}
+
 int cleanup() { 
 
     free(logPath);
+    free(endPortSharedMemory);
 
     if (shmdt(configArr) == -1) {
         handleErrno("shmdt()");
