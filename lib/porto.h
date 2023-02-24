@@ -19,5 +19,6 @@ int handlePA_RQ_SUMMARY(int goodId, int exchangeQuantity);
 int handlePA_EOT();
 int generateShareMemory(int sizeOfSegment);
 int generateSemaphore(int semKey);
+int setAcknowledge();
 int cleanup();
 void safeExit(int exitNumber);

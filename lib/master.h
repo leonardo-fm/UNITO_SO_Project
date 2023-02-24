@@ -1,5 +1,5 @@
 int initializeSingalsHandlers();
-int waitForInitializationOfChildren();
+int acknowledgeChildrenStatus();
 int work();
 int generateShareMemory(int sizeOfSegment);
 int generateSemaphore(int semKey);

@@ -23,6 +23,7 @@ int *configArr;
 
 int goodAnalyzerSharedMemoryId; 
 int portAnalyzerSharedMemoryId; 
+int acknowledgeInitShareMemoryId;
  
 int goodStockShareMemoryId;
 int goodRequestShareMemoryId;
@@ -146,9 +147,9 @@ int initializeConfig(char *configShareMemoryIdString, char *goodAnalyzerShareMem
 int initializePort(char *portIdString, char *portShareMemoryIdS, char *goodShareMemoryIdS, 
     char *acknowledgeInitShareMemoryIdS, char *endGoodShareMemoryIdS) {
     
-    int acknowledgeInitShareMemoryId;
     char *p;
-    int *acknowledgeArr;
+    
+    acknowledgeInitShareMemoryId = strtol(acknowledgeInitShareMemoryIdS, &p, 10);
 
     if (initializePortStruct(portIdString, portShareMemoryIdS) == -1) {
         handleError("Error occurred during init of port struct");
@@ -164,18 +165,9 @@ int initializePort(char *portIdString, char *portShareMemoryIdS, char *goodShare
         handleError("Error occurred during init of goods");
         return -1;
     }
-
-    acknowledgeInitShareMemoryId = strtol(acknowledgeInitShareMemoryIdS, &p, 10);
-    acknowledgeArr = (int*) shmat(acknowledgeInitShareMemoryId, NULL, 0);
-    if (acknowledgeArr == (void*) -1) {
-        handleErrno("shmat()");
-        return -1;
-    }
-
-    acknowledgeArr[port.id] = 1;
-
-    if (shmdt(acknowledgeArr) == -1) {
-        handleErrno("shmdt()");
+    
+    if (setAcknowledge() == -1) {
+        handleError("Acknowledge failed");
         return -1;
     }
 
@@ -588,7 +580,7 @@ int work() {
         handleErrno("shmdt()");
         return -1;
     }
-
+    
     return 0;
 }
 
@@ -643,6 +635,7 @@ int dumpData() {
 
     portDailyDump *portArr;
     portDailyDump pdd;
+
 
     arrStock = (Goods*) shmat(goodStockShareMemoryId, NULL, 0);
     if (arrStock == (void*) -1) {
@@ -736,6 +729,11 @@ int dumpData() {
 
     if (shmdt(arrRequest) == -1) {
         handleErrno("shmdt()");
+        return -1;
+    }
+
+    if (setAcknowledge() == -1) {
+        handleError("Acknowledge failed");
         return -1;
     }
 
@@ -1006,6 +1004,26 @@ int generateSemaphore(int semKey) {
     semaphore = sem_open(semaphoreKey, O_CREAT, 0600, 1);
     if (semaphore == SEM_FAILED) {
         handleErrno("sem_open()");
+        return -1;
+    }
+
+    return 0;
+}
+
+int setAcknowledge() {
+    
+    int *acknowledgeArr;
+
+    acknowledgeArr = (int*) shmat(acknowledgeInitShareMemoryId, NULL, 0);
+    if (acknowledgeArr == (void*) -1) {
+        handleErrno("shmat()");
+        return -1;
+    }
+
+    acknowledgeArr[port.id] = 1;
+
+    if (shmdt(acknowledgeArr) == -1) {
+        handleErrno("shmdt()");
         return -1;
     }
 

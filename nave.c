@@ -26,6 +26,7 @@ int *configArr;
 
 int goodAnalyzerSharedMemoryId; 
 int boatAnalyzerSharedMemoryId; 
+int acknowledgeInitShareMemoryId;
 
 int endGoodSharedMemoryId; 
 
@@ -154,8 +155,6 @@ int initializeBoat(char *boatIdS, char *portShareMemoryIdS, char *acknowledgeIni
 
     int i = 0;
     char *p;
-    int acknowledgeInitShareMemoryId;
-    int *acknowledgeArr;
 
     boat.id = strtol(boatIdS, &p, 10);
     boat.position = getRandomCoordinates(configArr[SO_LATO], configArr[SO_LATO]);
@@ -165,6 +164,7 @@ int initializeBoat(char *boatIdS, char *portShareMemoryIdS, char *acknowledgeIni
 
     portSharedMemoryId = strtol(portShareMemoryIdS, &p, 10);
     endGoodSharedMemoryId = strtol(endGoodShareMemoryIdS, &p, 10);
+    acknowledgeInitShareMemoryId = strtol(acknowledgeInitShareMemoryIdS, &p, 10);
 
     /* Initialization of the hold */
     goodHold = malloc(sizeof(Goods) * configArr[SO_MERCI]);
@@ -183,17 +183,8 @@ int initializeBoat(char *boatIdS, char *portShareMemoryIdS, char *acknowledgeIni
         goodHold[i] = emptyGood;
     }
     
-    acknowledgeInitShareMemoryId = strtol(acknowledgeInitShareMemoryIdS, &p, 10);
-    acknowledgeArr = (int*) shmat(acknowledgeInitShareMemoryId, NULL, 0);
-    if (acknowledgeArr == (void*) -1) {
-        handleErrno("shmat()");
-        return -1;
-    }
-
-    acknowledgeArr[boat.id] = 1;
-
-    if (shmdt(acknowledgeArr) == -1) {
-        handleErrno("shmdt()");
+    if (setAcknowledge() == -1) {
+        handleError("Acknowledge failed");
         return -1;
     }
 
@@ -309,6 +300,11 @@ int dumpData() {
 
     if (shmdt(boatArr) == -1) {
         handleErrno("shmdt()");
+        return -1;
+    }
+
+    if (setAcknowledge() == -1) {
+        handleError("Acknowledge failed");
         return -1;
     }
 
@@ -882,6 +878,26 @@ int getSpaceAvailableInTheHold() {
     }
 
     return boat.capacityInTon - totalNumOfTons;
+}
+
+int setAcknowledge() {
+    
+    int *acknowledgeArr;
+
+    acknowledgeArr = (int*) shmat(acknowledgeInitShareMemoryId, NULL, 0);
+    if (acknowledgeArr == (void*) -1) {
+        handleErrno("shmat()");
+        return -1;
+    }
+
+    acknowledgeArr[boat.id] = 1;
+
+    if (shmdt(acknowledgeArr) == -1) {
+        handleErrno("shmdt()");
+        return -1;
+    }
+
+    return 0;
 }
 
 int cleanup() {

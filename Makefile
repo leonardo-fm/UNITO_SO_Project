@@ -12,9 +12,7 @@ run: build
 	clear 
 	./bin/master
 
-run-l: build
-	clear 
-	./bin/master > $(LOG_FILE)
+runl: $(shell run | tee $(LOG_FILE))
 
 build: master nave porto analyzer
 

@@ -46,7 +46,7 @@ void handle_master_stopProcess() {
 
 int main() {
 
-    int analyzerArgs[7];
+    int analyzerArgs[8];
     int portArgs[7];
     int boatArgs[6];
 
@@ -68,6 +68,14 @@ int main() {
     if (loadConfig(configShareMemoryId) == -1) {
         safeExit(3);
     }
+     
+     
+    /* ----- ALL ----- */
+    acknowledgeInitShareMemoryId = generateShareMemory(sizeof(int) * (configArr[SO_NAVI] + configArr[SO_PORTI]));
+    if (acknowledgeInitShareMemoryId == -1) {
+        safeExit(10);
+    }
+
 
     /* ----- ANALYZER ----- */
     analyzerReadingMsgQueue = msgget(IPC_PRIVATE, IPC_CREAT | 0600);
@@ -106,7 +114,8 @@ int main() {
     analyzerArgs[4] = analyzerReadingMsgQueue;
     analyzerArgs[5] = analyzerWritingMsgQueue;
     analyzerArgs[6] = endGoodAnalyzerShareMemoryId;
-    if (generateSubProcesses(1, "./bin/analyzer", 0, analyzerArgs, 7) == -1) {
+    analyzerArgs[7] = acknowledgeInitShareMemoryId;
+    if (generateSubProcesses(1, "./bin/analyzer", 0, analyzerArgs, 8) == -1) {
         safeExit(7);
     }
 
@@ -119,13 +128,6 @@ int main() {
 
     if (initializeGoods(goodShareMemoryId) == -1) {
         safeExit(9);
-    }
-
-
-    /* ----- BOTH ----- */
-    acknowledgeInitShareMemoryId = generateShareMemory(sizeof(int) * (configArr[SO_NAVI] + configArr[SO_PORTI]));
-    if (acknowledgeInitShareMemoryId == -1) {
-        safeExit(10);
     }
 
 
@@ -156,13 +158,6 @@ int main() {
     boatArgs[5] = endGoodAnalyzerShareMemoryId;
     if (generateSubProcesses(configArr[SO_NAVI], "./bin/nave", 1, boatArgs, 6) == -1) {
         safeExit(13);
-    }
-
-
-    /* ----- CHECK INIT ----- */
-    if (waitForInitializationOfChildren() == -1) {
-        handleError("Error while waiting for children to be initialized");
-        safeExit(14);
     }
 
 
@@ -232,12 +227,12 @@ int waitForAnalizerToCollectData() {
     return 0;
 }
 
-int waitForInitializationOfChildren() {
+int acknowledgeChildrenStatus() {
 
     double waitTimeInSeconds = 0.005;
     int allChildrenInit, i;
     int *acknowledgeArr;
-    int acknowledgeArrLength = configArr[SO_NAVI] + configArr[SO_PORTI];
+    int entities = configArr[SO_NAVI] + configArr[SO_PORTI];
 
     acknowledgeArr = (int*) shmat(acknowledgeInitShareMemoryId, NULL, 0);
     if (acknowledgeArr == (void*) -1) {
@@ -255,7 +250,7 @@ int waitForInitializationOfChildren() {
 
         allChildrenInit = 1;
 
-        for (i = 0; i < acknowledgeArrLength; i++)
+        for (i = 0; i < entities; i++)
         {
             if (acknowledgeArr[i] == 0) {
                 debug("Failed init check");
@@ -273,8 +268,11 @@ int waitForInitializationOfChildren() {
 
     } while (allChildrenInit != 1);
 
-    if (shmctl(acknowledgeInitShareMemoryId, IPC_RMID, NULL) == -1) {
-        handleErrno("shmctl()");
+    /* Reset acknowledge */
+    memset(acknowledgeArr, 0, entities);
+
+    if (shmdt(acknowledgeArr) == -1) {
+        handleErrno("shmdt()");
         return -1;
     }
 
@@ -284,6 +282,11 @@ int waitForInitializationOfChildren() {
 int work() {
 
     int simulationDays = 0;
+
+    if (acknowledgeChildrenStatus() == -1) {
+        handleError("Error while waiting for children to be initialized");
+        return -1;
+    }
 
     /* Set the current group different from itselfe to avoid interupt from custom signals */
     setpgid(getpid(), getppid());
@@ -304,17 +307,17 @@ int work() {
             return -1;
         }
 
-        /* Salta il primo giorno */
-        if (simulationDays > 1) {
-
-            checkForAnalizerToFinish();
-        }
-        
         if (simulationDays < configArr[SO_DAYS] && simulationFinishedEarly == 0) {
 
             if (killpg(getpid(), SIGUSR2) == -1) {
                 handleErrno("killpg()");
                 return -1;
+            }
+
+            /* Salta il primo giorno */
+            if (simulationDays > 1) {
+
+                checkForAnalizerToFinish();
             }
 
             if (sendMessage(analyzerWritingMsgQueue, PA_NEW_DAY, -1, -1) == -1) {
@@ -331,6 +334,11 @@ int work() {
     }
 
     killpg(getpid(), SIGSYS);
+
+    if (acknowledgeChildrenStatus() == -1) {
+        handleError("Error while waiting for children to finish");
+        safeExit(14);
+    }
 
     if (sendMessage(analyzerWritingMsgQueue, PA_NEW_DAY, -1, -1) == -1) {
         handleError("Error during sendig of the PA_NEW_DAY finish");

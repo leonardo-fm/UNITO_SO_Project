@@ -16,5 +16,6 @@ int haveIGoodsToBuy();
 int sellGoods();
 int buyGoods();
 int getSpaceAvailableInTheHold();
+int setAcknowledge();
 int cleanup();
 void safeExit(int exitNumber);
