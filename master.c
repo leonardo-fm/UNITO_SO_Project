@@ -17,16 +17,16 @@
 
 #include "lib/master.h"
 
-int configShareMemoryId;
-int goodShareMemoryId;
-int portShareMemoryId;
+int configSharedMemoryId;
+int goodSharedMemoryId;
+int portSharedMemoryId;
 
-int goodAnalyzerShareMemoryId;
-int acknowledgeInitShareMemoryId;
-int boatAnalyzerShareMemoryId;
-int portAnalyzerShareMemoryId;
+int goodAnalyzerSharedMemoryId;
+int acknowledgeInitSharedMemoryId;
+int boatAnalyzerSharedMemoryId;
+int portAnalyzerSharedMemoryId;
 
-int endGoodAnalyzerShareMemoryId;
+int endgoodAnalyzerSharedMemoryId;
 
 int analyzerReadingMsgQueue;
 int analyzerWritingMsgQueue;
@@ -53,26 +53,26 @@ int main() {
     setpgid(getpid(), getpid());
 
     /* ----- CONFIG ----- */
-    configShareMemoryId = generateShareMemory(sizeof(int) * NUM_OF_SETTINGS);
-    if (configShareMemoryId == -1) {
+    configSharedMemoryId = generateSharedMemory(sizeof(int) * NUM_OF_SETTINGS);
+    if (configSharedMemoryId == -1) {
         safeExit(1);
     }
 
-    configArr = (int*) shmat(configShareMemoryId, NULL, 0);
+    configArr = (int*) shmat(configSharedMemoryId, NULL, 0);
     if (configArr == (void*) -1) {
         safeExit(2);
     }
 
     initializeEnvironment();
     initializeSingalsHandlers();
-    if (loadConfig(configShareMemoryId) == -1) {
+    if (loadConfig(configSharedMemoryId) == -1) {
         safeExit(3);
     }
      
      
     /* ----- ALL ----- */
-    acknowledgeInitShareMemoryId = generateShareMemory(sizeof(int) * (configArr[SO_NAVI] + configArr[SO_PORTI]));
-    if (acknowledgeInitShareMemoryId == -1) {
+    acknowledgeInitSharedMemoryId = generateSharedMemory(sizeof(int) * (configArr[SO_NAVI] + configArr[SO_PORTI]));
+    if (acknowledgeInitSharedMemoryId == -1) {
         safeExit(10);
     }
 
@@ -81,81 +81,81 @@ int main() {
     analyzerReadingMsgQueue = msgget(IPC_PRIVATE, IPC_CREAT | 0600);
     analyzerWritingMsgQueue = msgget(IPC_PRIVATE, IPC_CREAT | 0600);
 
-    goodAnalyzerShareMemoryId = generateShareMemory(
+    goodAnalyzerSharedMemoryId = generateSharedMemory(
         sizeof(goodDailyDump) * configArr[SO_MERCI] * (configArr[SO_NAVI] + configArr[SO_PORTI]));
-    if (goodAnalyzerShareMemoryId == -1) {
+    if (goodAnalyzerSharedMemoryId == -1) {
         safeExit(4);
     }
 
-    boatAnalyzerShareMemoryId = generateShareMemory(sizeof(boatDailyDump) * configArr[SO_NAVI]);
-    if (boatAnalyzerShareMemoryId == -1) {
+    boatAnalyzerSharedMemoryId = generateSharedMemory(sizeof(boatDailyDump) * configArr[SO_NAVI]);
+    if (boatAnalyzerSharedMemoryId == -1) {
         safeExit(5);
     }
 
-    portAnalyzerShareMemoryId = generateShareMemory(sizeof(portDailyDump) * configArr[SO_PORTI]);
-    if (portAnalyzerShareMemoryId == -1) {
+    portAnalyzerSharedMemoryId = generateSharedMemory(sizeof(portDailyDump) * configArr[SO_PORTI]);
+    if (portAnalyzerSharedMemoryId == -1) {
         safeExit(6);
     }
 
-    endGoodAnalyzerShareMemoryId = generateShareMemory(sizeof(goodEndDump) * configArr[SO_MERCI]);
-    if (endGoodAnalyzerShareMemoryId == -1) {
+    endgoodAnalyzerSharedMemoryId = generateSharedMemory(sizeof(goodEndDump) * configArr[SO_MERCI]);
+    if (endgoodAnalyzerSharedMemoryId == -1) {
         safeExit(17);
     }
 
-    if (generateSemaphore(endGoodAnalyzerShareMemoryId) == -1) {
+    if (generateSemaphore(endgoodAnalyzerSharedMemoryId) == (void*) -1) {
         handleError("Error during creation of semaphore for goods end dump");
         safeExit(18);
     }
 
-    analyzerArgs[0] = configShareMemoryId;
-    analyzerArgs[1] = goodAnalyzerShareMemoryId;
-    analyzerArgs[2] = boatAnalyzerShareMemoryId;
-    analyzerArgs[3] = portAnalyzerShareMemoryId;
+    analyzerArgs[0] = configSharedMemoryId;
+    analyzerArgs[1] = goodAnalyzerSharedMemoryId;
+    analyzerArgs[2] = boatAnalyzerSharedMemoryId;
+    analyzerArgs[3] = portAnalyzerSharedMemoryId;
     analyzerArgs[4] = analyzerReadingMsgQueue;
     analyzerArgs[5] = analyzerWritingMsgQueue;
-    analyzerArgs[6] = endGoodAnalyzerShareMemoryId;
-    analyzerArgs[7] = acknowledgeInitShareMemoryId;
+    analyzerArgs[6] = endgoodAnalyzerSharedMemoryId;
+    analyzerArgs[7] = acknowledgeInitSharedMemoryId;
     if (generateSubProcesses(1, "./bin/analyzer", 0, analyzerArgs, 8) == -1) {
         safeExit(7);
     }
 
 
     /* ----- GOODS ----- */
-    goodShareMemoryId = generateShareMemory(sizeof(Goods) * configArr[SO_MERCI]);
-    if (goodShareMemoryId == -1) {
+    goodSharedMemoryId = generateSharedMemory(sizeof(Goods) * configArr[SO_MERCI]);
+    if (goodSharedMemoryId == -1) {
         safeExit(8);
     }
 
-    if (initializeGoods(goodShareMemoryId) == -1) {
+    if (initializeGoods(goodSharedMemoryId) == -1) {
         safeExit(9);
     }
 
 
     /* ----- PORTS ----- */
-    portShareMemoryId = generateShareMemory(sizeof(Port) * configArr[SO_PORTI]);
-    if (portShareMemoryId == -1) {
+    portSharedMemoryId = generateSharedMemory(sizeof(Port) * configArr[SO_PORTI]);
+    if (portSharedMemoryId == -1) {
         safeExit(11);
     }
 
-    portArgs[0] = configShareMemoryId;
-    portArgs[1] = portShareMemoryId;
-    portArgs[2] = goodShareMemoryId;
-    portArgs[3] = goodAnalyzerShareMemoryId;
-    portArgs[4] = portAnalyzerShareMemoryId;
-    portArgs[5] = acknowledgeInitShareMemoryId;
-    portArgs[6] = endGoodAnalyzerShareMemoryId;
+    portArgs[0] = configSharedMemoryId;
+    portArgs[1] = portSharedMemoryId;
+    portArgs[2] = goodSharedMemoryId;
+    portArgs[3] = goodAnalyzerSharedMemoryId;
+    portArgs[4] = portAnalyzerSharedMemoryId;
+    portArgs[5] = acknowledgeInitSharedMemoryId;
+    portArgs[6] = endgoodAnalyzerSharedMemoryId;
     if (generateSubProcesses(configArr[SO_PORTI], "./bin/porto", 1, portArgs, 7) == -1) {
         safeExit(12);
     }
 
 
     /* ----- BOATS ----- */
-    boatArgs[0] = configShareMemoryId;
-    boatArgs[1] = portShareMemoryId;
-    boatArgs[2] = goodAnalyzerShareMemoryId;
-    boatArgs[3] = boatAnalyzerShareMemoryId;
-    boatArgs[4] = acknowledgeInitShareMemoryId;
-    boatArgs[5] = endGoodAnalyzerShareMemoryId;
+    boatArgs[0] = configSharedMemoryId;
+    boatArgs[1] = portSharedMemoryId;
+    boatArgs[2] = goodAnalyzerSharedMemoryId;
+    boatArgs[3] = boatAnalyzerSharedMemoryId;
+    boatArgs[4] = acknowledgeInitSharedMemoryId;
+    boatArgs[5] = endgoodAnalyzerSharedMemoryId;
     if (generateSubProcesses(configArr[SO_NAVI], "./bin/nave", 1, boatArgs, 6) == -1) {
         safeExit(13);
     }
@@ -234,7 +234,7 @@ int acknowledgeChildrenStatus() {
     int *acknowledgeArr;
     int entities = configArr[SO_NAVI] + configArr[SO_PORTI];
 
-    acknowledgeArr = (int*) shmat(acknowledgeInitShareMemoryId, NULL, 0);
+    acknowledgeArr = (int*) shmat(acknowledgeInitSharedMemoryId, NULL, 0);
     if (acknowledgeArr == (void*) -1) {
         handleErrno("shmat()");
         return -1;
@@ -350,16 +350,16 @@ int work() {
     return 0;
 }
 
-int generateShareMemory(int sizeOfSegment) {
+int generateSharedMemory(int sizeOfSegment) {
     
     int *sharedMemory;
-    int shareMemoryId = shmget(IPC_PRIVATE, sizeOfSegment, 0600);
-    if (shareMemoryId == -1) {
+    int sharedMemoryId = shmget(IPC_PRIVATE, sizeOfSegment, 0600);
+    if (sharedMemoryId == -1) {
         handleErrno("shmget()");
         return -1;
     }
 
-    sharedMemory = (int*) shmat(shareMemoryId, NULL, 0);
+    sharedMemory = (int*) shmat(sharedMemoryId, NULL, 0);
     if (sharedMemory == (void*) -1) {
         handleErrno("shmat()");
         return -1;
@@ -372,28 +372,28 @@ int generateShareMemory(int sizeOfSegment) {
         return -1;
     }
 
-    return shareMemoryId;
+    return sharedMemoryId;
 }
 
 /* Generate a semaphore */
 /* https://stackoverflow.com/questions/32205396/share-posix-semaphore-among-multiple-processes */
-int generateSemaphore(int semKey) {
+sem_t *generateSemaphore(int semKey) {
 
     char semaphoreKey[12];
     sem_t *semaphore;
 
     if (sprintf(semaphoreKey, "%d", semKey) == -1) {
         handleError("Error during conversion of the pid for semaphore to a string");
-        return -1;
+        return (sem_t*) -1;
     }   
 
     semaphore = sem_open(semaphoreKey, O_CREAT, 0600, 1);
     if (semaphore == SEM_FAILED) {
         handleErrno("sem_open()");
-        return -1;
+        return (sem_t*) -1;
     }
 
-    return 0;
+    return semaphore;
 }
 
 /* Generate processes by forking master and using execve */
@@ -463,10 +463,10 @@ int generateSubProcesses(int nOfProcess, char *execFilePath, int includeProcedur
     return 0;
 }
 
-int initializeGoods(int goodShareMemoryId) {
+int initializeGoods(int goodSharedMemoryId) {
 
     /* Init of goods */
-    if (generateGoods(goodShareMemoryId) == -1) {
+    if (generateGoods(goodSharedMemoryId) == -1) {
         handleError("Error while generating goods");
         return -1;
     }
@@ -475,12 +475,12 @@ int initializeGoods(int goodShareMemoryId) {
 }
 
 /* Generate all the goods requested and initialize them */
-int generateGoods(int goodShareMemoryId) {
+int generateGoods(int goodSharedMemoryId) {
 
     int *randomGoodDistribution;
     int i;
 
-    Goods *arr = (Goods*) shmat(goodShareMemoryId, NULL, 0);
+    Goods *arr = (Goods*) shmat(goodSharedMemoryId, NULL, 0);
     if (arr == (void*) -1) {
         handleErrno("shmat");
         return -1;
@@ -517,17 +517,17 @@ int cleanup() {
         return -1;
     }
 
-    if (shmctl(configShareMemoryId, IPC_RMID, NULL) == -1) {
+    if (shmctl(configSharedMemoryId, IPC_RMID, NULL) == -1) {
         handleErrno("shmctl()");
         return -1;
     }
 
-    if (shmctl(goodShareMemoryId, IPC_RMID, NULL) == -1) {
+    if (shmctl(goodSharedMemoryId, IPC_RMID, NULL) == -1) {
         handleErrno("shmctl()");
         return -1;
     }
     
-    if (shmctl(portShareMemoryId, IPC_RMID, NULL) == -1) {
+    if (shmctl(portSharedMemoryId, IPC_RMID, NULL) == -1) {
         handleErrno("shmctl()");
         return -1;
     }
