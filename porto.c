@@ -835,6 +835,11 @@ int cleanup() {
         return -1;
     }
 
+    if (shmdt(goodStockArr) == -1) {
+        handleErrno("shmdt()");
+        return -1;
+    }
+
     if (shmctl(goodStockShareMemoryId, IPC_RMID, NULL) == -1) {
         handleErrno("msgctl()");
         return -1;
@@ -842,6 +847,11 @@ int cleanup() {
 
     if (sem_close(goodStockSemaphore) == -1) {
         handleErrno("sem_close()");
+        return -1;
+    }
+    
+    if (shmdt(goodRequestArr) == -1) {
+        handleErrno("shmdt()");
         return -1;
     }
 
