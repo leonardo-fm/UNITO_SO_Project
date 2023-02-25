@@ -24,13 +24,13 @@
 
 int *configArr;
 
-int goodAnalyzerSharedMemoryId; 
-int boatAnalyzerSharedMemoryId; 
-int acknowledgeInitShareMemoryId;
+goodDailyDump *goodAnalyzerSharedMemoryArr; 
+boatDailyDump *boatAnalyzerSharedMemoryArr; 
+int *acknowledgeShareMemoryArr;
+goodEndDump *endGoodSharedMemoryArr; 
+sem_t *endGoodSharedMemorySemaphore;
+Port *portSharedMemoryArr; 
 
-int endGoodSharedMemoryId; 
-
-int portSharedMemoryId; 
 int currentMsgQueueId = -1;
 int currentPort = -1;
 int readingMsgQueue = -1;
@@ -88,12 +88,12 @@ int main(int argx, char *argv[]) {
     initializeEnvironment();
     initializeSingalsHandlers();
 
-    if (initializeConfig(argv[1], argv[3], argv[4]) == -1) {
+    if (initializeConfig(argv[1], argv[3], argv[4], argv[5], argv[6]) == -1) {
         handleError("Initialization of boat config failed");
         safeExit(1);
     }
     
-    if (initializeBoat(argv[0], argv[2], argv[5], argv[6]) == -1) {
+    if (initializeBoat(argv[0], argv[2]) == -1) {
         handleError("Initialization of boat failed");
         safeExit(2);
     }
@@ -134,13 +134,16 @@ int initializeSingalsHandlers() {
     return 0;
 }
 
-int initializeConfig(char *configShareMemoryIdString, char *goodAnalyzerShareMemoryIdString, char *boatAnalyzerShareMemoryIdString) {
+int initializeConfig(char *configShareMemoryIdString, char *goodAnalyzerShareMemoryIdString, 
+    char *boatAnalyzerShareMemoryIdString, char *acknowledgeInitShareMemoryIdS, char *endGoodShareMemoryIdS) {
 
     char *p;
+
     int configShareMemoryId = strtol(configShareMemoryIdString, &p, 10);
-    
-    goodAnalyzerSharedMemoryId = strtol(goodAnalyzerShareMemoryIdString, &p, 10);
-    boatAnalyzerSharedMemoryId = strtol(boatAnalyzerShareMemoryIdString, &p, 10);
+    int goodAnalyzerSharedMemoryId = strtol(goodAnalyzerShareMemoryIdString, &p, 10);
+    int boatAnalyzerSharedMemoryId = strtol(boatAnalyzerShareMemoryIdString, &p, 10);
+    int acknowledgeInitShareMemoryId = strtol(acknowledgeInitShareMemoryIdS, &p, 10);
+    int endGoodSharedMemoryId = strtol(endGoodShareMemoryIdS, &p, 10);
     
     configArr = (int*) shmat(configShareMemoryId, NULL, 0);
     if (configArr == (void*) -1) {
@@ -148,23 +151,56 @@ int initializeConfig(char *configShareMemoryIdString, char *goodAnalyzerShareMem
         return -1;
     }
 
+    goodAnalyzerSharedMemoryArr = (goodDailyDump*) shmat(goodAnalyzerSharedMemoryId, NULL, 0);
+    if (goodAnalyzerSharedMemoryArr == (void*) -1) {
+        handleErrno("shmat()");
+        return -1;
+    }
+
+    boatAnalyzerSharedMemoryArr = (boatDailyDump*) shmat(boatAnalyzerSharedMemoryId, NULL, 0);
+    if (boatAnalyzerSharedMemoryArr == (void*) -1) {
+        handleErrno("shmat()");
+        return -1;
+    }
+
+    acknowledgeShareMemoryArr = (int*) shmat(acknowledgeInitShareMemoryId, NULL, 0);
+    if (acknowledgeShareMemoryArr == (void*) -1) {
+        handleErrno("shmat()");
+        return -1;
+    }
+
+    endGoodSharedMemoryArr = (goodEndDump*) shmat(endGoodSharedMemoryId, NULL, 0);
+    if (endGoodSharedMemoryArr == (void*) -1) {
+        handleErrno("shmat()");
+        return -1;
+    }
+
+    endGoodSharedMemorySemaphore = sem_open(endGoodShareMemoryIdS, O_EXCL, 0600, 1);
+    if (endGoodSharedMemorySemaphore == SEM_FAILED) {
+        handleErrno("sem_open()");
+        return -1;
+    }
+
     return 0;
 }
 
-int initializeBoat(char *boatIdS, char *portShareMemoryIdS, char *acknowledgeInitShareMemoryIdS, char *endGoodShareMemoryIdS) {
+int initializeBoat(char *boatIdS, char *portShareMemoryIdS) {
 
     int i = 0;
     char *p;
+    int portSharedMemoryId = strtol(portShareMemoryIdS, &p, 10);
+
+    portSharedMemoryArr = (Port*) shmat(portSharedMemoryId, NULL, 0);
+    if (portSharedMemoryArr == (void*) -1) {
+        handleErrno("shmat()");
+        return -1;
+    }
 
     boat.id = strtol(boatIdS, &p, 10);
     boat.position = getRandomCoordinates(configArr[SO_LATO], configArr[SO_LATO]);
     boat.capacityInTon = configArr[S0_CAPACITY];
     boat.speed = configArr[SO_SPEED];
     boat.state = In_Sea_Empty;
-
-    portSharedMemoryId = strtol(portShareMemoryIdS, &p, 10);
-    endGoodSharedMemoryId = strtol(endGoodShareMemoryIdS, &p, 10);
-    acknowledgeInitShareMemoryId = strtol(acknowledgeInitShareMemoryIdS, &p, 10);
 
     /* Initialization of the hold */
     goodHold = malloc(sizeof(Goods) * configArr[SO_MERCI]);
@@ -183,10 +219,7 @@ int initializeBoat(char *boatIdS, char *portShareMemoryIdS, char *acknowledgeIni
         goodHold[i] = emptyGood;
     }
     
-    if (setAcknowledge() == -1) {
-        handleError("Acknowledge failed");
-        return -1;
-    }
+    acknowledgeShareMemoryArr[boat.id] = 1;
 
     return 0;
 }
@@ -247,20 +280,12 @@ int waitForStart() {
 int dumpData() {
 
     int i, goodReferenceId, boatReferenceId;
-    goodDailyDump *goodArr;
+    
     goodDailyDump gdd;
-
-    boatDailyDump *boatArr;
     boatDailyDump bdd;
 
     /* Send goods data */
     goodReferenceId = boat.id * configArr[SO_MERCI];
-    goodArr = (goodDailyDump*) shmat(goodAnalyzerSharedMemoryId, NULL, 0);
-    if (goodArr == (void*) -1) {
-        handleErrno("shmat()");
-        return -1;
-    }
-
     for (i = 0; i < configArr[SO_MERCI]; i++) {
 
         gdd.goodId = i;
@@ -278,35 +303,18 @@ int dumpData() {
         gdd.Good_Expired_In_The_Port = 0;
         gdd.Good_In_The_Port = 0;
 
-        memcpy(&goodArr[goodReferenceId + i], &gdd, sizeof(goodDailyDump)); 
-    }
-
-    if (shmdt(goodArr) == -1) {
-        handleErrno("shmdt()");
-        return -1;
+        memcpy(&goodAnalyzerSharedMemoryArr[goodReferenceId + i], &gdd, sizeof(goodDailyDump)); 
     }
 
     /* Send boat data */
     boatReferenceId = boat.id - configArr[SO_PORTI];
-    boatArr = (boatDailyDump*) shmat(boatAnalyzerSharedMemoryId, NULL, 0);
-    if (boatArr == (void*) -1) {
-        handleErrno("shmat()");
-        return -1;
-    }
 
     bdd.id = boat.id;
     bdd.boatState = boat.state;
-    boatArr[boatReferenceId] = bdd;
+    memcpy(&boatAnalyzerSharedMemoryArr[boatReferenceId], &bdd, sizeof(boatDailyDump)); 
 
-    if (shmdt(boatArr) == -1) {
-        handleErrno("shmdt()");
-        return -1;
-    }
-
-    if (setAcknowledge() == -1) {
-        handleError("Acknowledge failed");
-        return -1;
-    }
+    /* Acknowledge finish dump data */
+    acknowledgeShareMemoryArr[boat.id] = 1;
 
     return 0;
 }
@@ -325,26 +333,6 @@ int waitForNewDay() {
 int newDay() {
 
     int i;
-    goodEndDump *arrEndGoodDump;
-    sem_t *endGoodSemaphore;
-    char semaphoreKey[12];
-
-    arrEndGoodDump = (goodEndDump*) shmat(endGoodSharedMemoryId, NULL, 0);
-    if (arrEndGoodDump == (void*) -1) {
-        handleErrno("shmat()");
-        return -1;
-    }
-
-    if (sprintf(semaphoreKey, "%d", endGoodSharedMemoryId) == -1) {
-        handleError("Error during conversion of the pid for semaphore to a string");
-        return -1;
-    }
-
-    endGoodSemaphore = sem_open(semaphoreKey, O_EXCL, 0600, 1);
-    if (endGoodSemaphore == SEM_FAILED) {
-        handleErrno("sem_open()");
-        return -1;
-    }
 
     for (i = 0; i < configArr[SO_MERCI]; i++) {
         if(goodHold[i].remaningDays > 0) {
@@ -353,21 +341,11 @@ int newDay() {
             if (goodHold[i].remaningDays == 0 && isSelling != i) {
                 goodHold[i].state = Expired_In_The_Boat;
 
-                sem_wait(endGoodSemaphore);
-                arrEndGoodDump[i].expiredInBoat += goodHold[i].loadInTon;
-                sem_post(endGoodSemaphore);
+                sem_wait(endGoodSharedMemorySemaphore);
+                endGoodSharedMemoryArr[i].expiredInBoat += goodHold[i].loadInTon;
+                sem_post(endGoodSharedMemorySemaphore);
             }
         }
-    }
-
-    if (sem_close(endGoodSemaphore) < 0) {
-        handleErrno("sem_close()");
-        return -1;
-    }
-
-    if (shmdt(arrEndGoodDump) == -1) {
-        handleErrno("shmdt()");
-        return -1;
     }
 
     return 0;
@@ -376,16 +354,9 @@ int newDay() {
 int gotoPort() {
 
     int newPortFound = 0;
-    Port *portArr;
     double distance, kmPerDay;
     long waitTimeNs;
     int waitTimeS;
-
-    portArr = (Port*) shmat(portSharedMemoryId, NULL, 0);
-    if (portArr == (void*) -1) {
-        handleErrno("shmat()");
-        return -1;
-    }
 
     while (newPortFound == 0)
     {
@@ -397,13 +368,8 @@ int gotoPort() {
         }
     }
 
-    distance = sqrt(pow(portArr[currentPort].position.x - boat.position.x, 2) 
-                    + pow(portArr[currentPort].position.y - boat.position.y, 2));
-    
-    if (shmdt(portArr) == -1) {
-        handleErrno("shmdt()");
-        return -1;
-    }
+    distance = sqrt(pow(portSharedMemoryArr[currentPort].position.x - boat.position.x, 2) 
+                    + pow(portSharedMemoryArr[currentPort].position.y - boat.position.y, 2));
 
     kmPerDay = distance / configArr[SO_SPEED];
     waitTimeNs = getNanoSeconds(kmPerDay);
@@ -419,8 +385,6 @@ int gotoPort() {
 
 int setupTrade(int portId) {
 
-    Port *portArr;
-
     readingMsgQueue = msgget(IPC_PRIVATE, IPC_CREAT | 0600);
     writingMsgQueue = msgget(IPC_PRIVATE, IPC_CREAT | 0600);
 
@@ -428,21 +392,10 @@ int setupTrade(int portId) {
         handleError("The old comunication was not closed properly");
         return -1;
     }
-    
-    portArr = (Port*) shmat(portSharedMemoryId, NULL, 0);
-    if (portArr == (void*) -1) {
-        handleErrno("shmat()");
-        return -1;
-    }
 
-    currentMsgQueueId = portArr[portId].msgQueuId;
+    currentMsgQueueId = portSharedMemoryArr[portId].msgQueuId;
     if (sendMessage(currentMsgQueueId, PA_SETUP, writingMsgQueue, readingMsgQueue) == -1) {
         handleError("Failed to send SETUP comunication");
-        return -1;
-    }
-
-    if (shmdt(portArr) == -1) {
-        handleErrno("shmdt()");
         return -1;
     }
 
@@ -723,7 +676,7 @@ int sellGoods() {
         }    
     }
 
-    if (sem_close(semaphore) < 0) {
+    if (sem_close(semaphore) == -1) {
         handleErrno("sem_close()");
         return -1;
     }
@@ -855,7 +808,7 @@ int buyGoods() {
         }    
     }
 
-    if (sem_close(semaphore) < 0) {
+    if (sem_close(semaphore) == -1) {
         handleErrno("sem_close()");
         return -1;
     }
@@ -880,26 +833,6 @@ int getSpaceAvailableInTheHold() {
     return boat.capacityInTon - totalNumOfTons;
 }
 
-int setAcknowledge() {
-    
-    int *acknowledgeArr;
-
-    acknowledgeArr = (int*) shmat(acknowledgeInitShareMemoryId, NULL, 0);
-    if (acknowledgeArr == (void*) -1) {
-        handleErrno("shmat()");
-        return -1;
-    }
-
-    acknowledgeArr[boat.id] = 1;
-
-    if (shmdt(acknowledgeArr) == -1) {
-        handleErrno("shmdt()");
-        return -1;
-    }
-
-    return 0;
-}
-
 int cleanup() {
 
     if (simulationRunning == 1) {
@@ -908,6 +841,31 @@ int cleanup() {
 
     if (simulationRunning == 1) {
         msgctl(writingMsgQueue, IPC_RMID, NULL);
+    }
+
+    if (shmdt(goodAnalyzerSharedMemoryArr) == -1) {
+        handleErrno("shmdt()");
+        return -1;
+    }
+
+    if (shmdt(boatAnalyzerSharedMemoryArr) == -1) {
+        handleErrno("shmdt()");
+        return -1;
+    }
+
+    if (shmdt(acknowledgeShareMemoryArr) == -1) {
+        handleErrno("shmdt()");
+        return -1;
+    }
+
+    if (sem_close(endGoodSharedMemorySemaphore) == -1) {
+        handleErrno("sem_close()");
+        return -1;
+    }
+
+    if (shmdt(portSharedMemoryArr) == -1) {
+        handleErrno("shmdt()");
+        return -1;
     }
 
     if (shmdt(configArr) == -1) {

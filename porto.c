@@ -569,7 +569,7 @@ int work() {
     if (sem_close(endGoodSemaphore) < 0) {
         handleErrno("sem_close()");
         return -1;
-    }
+    }    
 
     if (shmdt(arrEndGoodDump) == -1) {
         handleErrno("shmdt()");
@@ -580,7 +580,7 @@ int work() {
         handleErrno("shmdt()");
         return -1;
     }
-    
+
     return 0;
 }
 

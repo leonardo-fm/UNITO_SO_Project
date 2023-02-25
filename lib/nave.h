@@ -1,6 +1,7 @@
 int initializeSingalsHandlers();
-int initializeConfig(char *configShareMemoryIdString, char *goodAnalyzerShareMemoryIdString, char *boatAnalyzerShareMemoryIdString);
-int initializeBoat(char *boatIdS, char *portShareMemoryIdS, char *acknowledgeInitShareMemoryIdS, char *endGoodShareMemoryIdS);
+int initializeConfig(char *configShareMemoryIdString, char *goodAnalyzerShareMemoryIdString, 
+    char *boatAnalyzerShareMemoryIdString, char *acknowledgeInitShareMemoryIdS, char *endGoodShareMemoryIdS);
+int initializeBoat(char *boatIdS, char *portShareMemoryIdS);
 int work();
 int waitForStart();
 int dumpData();
@@ -16,6 +17,5 @@ int haveIGoodsToBuy();
 int sellGoods();
 int buyGoods();
 int getSpaceAvailableInTheHold();
-int setAcknowledge();
 int cleanup();
 void safeExit(int exitNumber);
