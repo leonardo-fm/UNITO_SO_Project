@@ -67,6 +67,12 @@ void handle_analyzer_simulation_signals(int signal) {
 }
 
 void handle_analyzer_stopProcess() {
+
+    /* Block all incoming signals after the first SIGINT */
+    sigset_t mask;
+    sigfillset(&mask);
+    sigprocmask(SIG_BLOCK, &mask, NULL);
+
     debug("Stopping analyzer...");
     cleanup();
     exit(0);

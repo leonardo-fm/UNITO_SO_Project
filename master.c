@@ -17,9 +17,12 @@
 
 #include "lib/master.h"
 
-int configSharedMemoryId;
-int goodSharedMemoryId;
-int portSharedMemoryId;
+int NUM_OF_SETTINGS = 13;
+int *configArr = 0;
+
+int configSharedMemoryId = 0;
+int goodSharedMemoryId = 0;
+int portSharedMemoryId = 0;
 
 int goodAnalyzerSharedMemoryId;
 int acknowledgeInitSharedMemoryId;
@@ -31,12 +34,15 @@ int endgoodAnalyzerSharedMemoryId;
 int analyzerReadingMsgQueue;
 int analyzerWritingMsgQueue;
 
-int NUM_OF_SETTINGS = 13;
-int *configArr;
 int currentProcessId;
 int simulationFinishedEarly = 0;
 
 void handle_master_stopProcess() { 
+
+    /* Block all incoming signals after the first SIGINT */
+    sigset_t mask;
+    sigfillset(&mask);
+    sigprocmask(SIG_BLOCK, &mask, NULL);
 
     debug("\nStopping program...");
     killpg(getpid(), SIGINT);
@@ -512,22 +518,22 @@ int generateGoods(int goodSharedMemoryId) {
 
 int cleanup() {
 
-    if (shmdt(configArr) == -1) {
+    if (configArr != 0 && shmdt(configArr) == -1) {
         handleErrno("shmdt()");
         return -1;
     }
 
-    if (shmctl(configSharedMemoryId, IPC_RMID, NULL) == -1) {
+    if (configSharedMemoryId != 0 && shmctl(configSharedMemoryId, IPC_RMID, NULL) == -1) {
         handleErrno("shmctl()");
         return -1;
     }
 
-    if (shmctl(goodSharedMemoryId, IPC_RMID, NULL) == -1) {
+    if (goodSharedMemoryId != 0 && shmctl(goodSharedMemoryId, IPC_RMID, NULL) == -1) {
         handleErrno("shmctl()");
         return -1;
     }
     
-    if (shmctl(portSharedMemoryId, IPC_RMID, NULL) == -1) {
+    if (portSharedMemoryId != 0 && shmctl(portSharedMemoryId, IPC_RMID, NULL) == -1) {
         handleErrno("shmctl()");
         return -1;
     }

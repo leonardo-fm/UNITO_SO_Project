@@ -12,8 +12,6 @@ run: build
 	clear 
 	./bin/master
 
-runl: $(shell run | tee $(LOG_FILE))
-
 build: master nave porto analyzer
 
 master: master.c

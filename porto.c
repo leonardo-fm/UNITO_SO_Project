@@ -19,23 +19,23 @@
 
 #include "lib/porto.h"
 
-int *configArr;
+int *configArr = 0;
 
-goodDailyDump *goodDumpArr; 
-portDailyDump *portDumpArr; 
-int *acknowledgeArr;
-goodEndDump *endGoodDumpArr;
-sem_t *endGoodSemaphore; 
+goodDailyDump *goodDumpArr = 0; 
+portDailyDump *portDumpArr = 0; 
+int *acknowledgeArr = 0;
+goodEndDump *endGoodDumpArr = 0;
+sem_t *endGoodSemaphore = 0; 
 
-Port port;
+Port port = {-1, 0, 0, 0, {0, 0}};
 
-int goodStockShareMemoryId;
-Goods *goodStockArr;
-sem_t *goodStockSemaphore;
+int goodStockShareMemoryId = 0;
+Goods *goodStockArr = 0;
+sem_t *goodStockSemaphore = 0;
 
-int goodRequestShareMemoryId;
-Goods *goodRequestArr;
-sem_t *goodRequestSemaphore;
+int goodRequestShareMemoryId = 0;
+Goods *goodRequestArr = 0;
+sem_t *goodRequestSemaphore = 0;
 
 int simulationRunning = 1;
 
@@ -72,6 +72,12 @@ void handle_port_simulation_signals(int signal) {
 
 void handle_port_stopProcess() {
 
+    /* Block all incoming signals after the first SIGINT */
+    sigset_t mask;
+    sigfillset(&mask);
+    sigprocmask(SIG_BLOCK, &mask, NULL);
+    
+    debug("Stopping port...");
     cleanup();
     exit(0);
 }
@@ -104,6 +110,7 @@ int main(int argx, char *argv[]) {
         safeExit(4);
     }
 
+    printConsole("port exit");
     return 0;
 }
 
@@ -786,81 +793,65 @@ sem_t *generateSemaphore(int semKey) {
 
     return semaphore;
 }
-
-/*
-goodDailyDump *goodDumpArr; 
-portDailyDump *portDumpArr; 
-int *acknowledgeArr;
-goodEndDump *endGoodDumpArr;
-sem_t *endGoodSemaphore; 
-
-Port port;
-
-Goods *goodStockArr;
-sem_t *goodStockSemaphore;
-
-Goods *goodRequestArr;
-sem_t *goodRequestSemaphore;
-*/
  
 int cleanup() {
 
-    if (shmdt(configArr) == -1) {
+    if (configArr != 0 && shmdt(configArr) == -1) {
         handleErrno("shmdt()");
         return -1;
     }
 
-    if (shmdt(goodDumpArr) == -1) {
+    if (goodDumpArr != 0 && shmdt(goodDumpArr) == -1) {
         handleErrno("shmdt()");
         return -1;
     }
 
-    if (shmdt(portDumpArr) == -1) {
+    if (portDumpArr != 0 && shmdt(portDumpArr) == -1) {
         handleErrno("shmdt()");
         return -1;
     }
      
-    if (shmdt(endGoodDumpArr) == -1) {
+    if (endGoodDumpArr != 0 && shmdt(endGoodDumpArr) == -1) {
         handleErrno("shmdt()");
         return -1;
     }
 
-    if (sem_close(endGoodSemaphore) == -1) {
+    if (endGoodSemaphore != 0 && sem_close(endGoodSemaphore) == -1) {
         handleErrno("shmdt()");
         return -1;
     }
 
-    if (msgctl(port.msgQueuId, IPC_RMID, NULL) == -1) {
+    if (port.msgQueuId != 0 && msgctl(port.msgQueuId, IPC_RMID, NULL) == -1) {
         handleErrno("msgctl()");
         return -1;
     }
 
-    if (shmdt(goodStockArr) == -1) {
+    if (goodStockArr != 0 && shmdt(goodStockArr) == -1) {
         handleErrno("shmdt()");
         return -1;
     }
 
-    if (shmctl(goodStockShareMemoryId, IPC_RMID, NULL) == -1) {
+    if (goodStockShareMemoryId != 0 && shmctl(goodStockShareMemoryId, IPC_RMID, NULL) == -1) {
         handleErrno("msgctl()");
         return -1;
     }
 
-    if (sem_close(goodStockSemaphore) == -1) {
+    if (goodStockSemaphore != 0 && sem_close(goodStockSemaphore) == -1) {
         handleErrno("sem_close()");
         return -1;
     }
     
-    if (shmdt(goodRequestArr) == -1) {
+    if (goodRequestArr != 0 && shmdt(goodRequestArr) == -1) {
         handleErrno("shmdt()");
         return -1;
     }
 
-    if (shmctl(goodRequestShareMemoryId, IPC_RMID, NULL) == -1) {
+    if (goodRequestShareMemoryId != 0 && shmctl(goodRequestShareMemoryId, IPC_RMID, NULL) == -1) {
         handleErrno("msgctl()");
         return -1;
     }
 
-    if (sem_close(goodRequestSemaphore) == -1) {
+    if (goodRequestSemaphore != 0 && sem_close(goodRequestSemaphore) == -1) {
         handleErrno("sem_close()");
         return -1;
     }

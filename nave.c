@@ -75,6 +75,12 @@ void handle_boat_simulation_signals(int signal) {
 }
 
 void handle_boat_stopProcess() {
+
+    /* Block all incoming signals after the first SIGINT */
+    sigset_t mask;
+    sigfillset(&mask);
+    sigprocmask(SIG_BLOCK, &mask, NULL);
+
     debug("Stopping boat...");
     cleanup();
     exit(0);

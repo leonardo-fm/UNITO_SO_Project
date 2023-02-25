@@ -66,9 +66,9 @@ typedef struct {
 typedef struct {
     int id;
     int msgQueuId;
-    Coordinates position;
     int quays;
     int availableQuays;
+    Coordinates position;
 } Port;
 
 
