@@ -1,10 +1,10 @@
 int initializeSingalsHandlers();
-int initializeConfig(char *configShareMemoryIdString, char *goodAnalyzerShareMemoryIdString, char *portAnalyzerShareMemoryIdString);
-int initializePort(char *portIdString, char *portShareMemoryIdS, char *goodShareMemoryIdS, 
-    char *acknowledgeInitShareMemoryIdS, char *endGoodShareMemoryIdS);
+int initializeConfig(char *configShareMemoryIdString, char *goodAnalyzerShareMemoryIdString, 
+    char *portAnalyzerShareMemoryIdString, char *acknowledgeInitShareMemoryIdS, char *endGoodShareMemoryIdS);
+int initializePort(char *portIdString, char *portShareMemoryIdS, char *goodShareMemoryIdS);
 int initializePortStruct(char *portIdString, char *portShareMemoryIdS);
 int initializeExchangeGoods();
-int initializePortGoods(char *goodShareMemoryIdS, char *endGoodShareMemoryIdS);
+int initializePortGoods(char *goodShareMemoryIdS);
 int work();
 int waitForStart();
 int dumpData();
@@ -18,7 +18,6 @@ int handlePA_RQ_GOOD(int queueId);
 int handlePA_RQ_SUMMARY(int goodId, int exchangeQuantity);
 int handlePA_EOT();
 int generateShareMemory(int sizeOfSegment);
-int generateSemaphore(int semKey);
-int setAcknowledge();
+sem_t *generateSemaphore(int semKey);
 int cleanup();
 void safeExit(int exitNumber);

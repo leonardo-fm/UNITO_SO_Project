@@ -21,17 +21,21 @@
 
 int *configArr;
 
-int goodAnalyzerSharedMemoryId; 
-int portAnalyzerSharedMemoryId; 
-int acknowledgeInitShareMemoryId;
- 
-int goodStockShareMemoryId;
-int goodRequestShareMemoryId;
-
-int endGoodSharedMemoryId; 
+goodDailyDump *goodDumpArr; 
+portDailyDump *portDumpArr; 
+int *acknowledgeArr;
+goodEndDump *endGoodDumpArr;
+sem_t *endGoodSemaphore; 
 
 Port port;
-Goods **goodExchange;
+
+int goodStockShareMemoryId;
+Goods *goodStockArr;
+sem_t *goodStockSemaphore;
+
+int goodRequestShareMemoryId;
+Goods *goodRequestArr;
+sem_t *goodRequestSemaphore;
 
 int simulationRunning = 1;
 
@@ -80,12 +84,12 @@ int main(int argx, char *argv[]) {
     initializeEnvironment();
     initializeSingalsHandlers();
 
-    if (initializeConfig(argv[1], argv[4], argv[5]) == -1) {
+    if (initializeConfig(argv[1], argv[4], argv[5], argv[6], argv[7]) == -1) {
         handleError("Initialization of port config failed");
         safeExit(1);
     }
 
-    if (initializePort(argv[0], argv[2], argv[3], argv[6], argv[7]) == -1) {
+    if (initializePort(argv[0], argv[2], argv[3]) == -1) {
         handleError("Initialization of port failed");
         safeExit(2);
     }
@@ -126,14 +130,15 @@ int initializeSingalsHandlers() {
     return 0;
 }
 
-/* Recover the array of the configurations values */
-int initializeConfig(char *configShareMemoryIdString, char *goodAnalyzerShareMemoryIdString, char *portAnalyzerShareMemoryIdString) {
+int initializeConfig(char *configShareMemoryIdString, char *goodAnalyzerShareMemoryIdString, 
+    char *portAnalyzerShareMemoryIdString, char *acknowledgeInitShareMemoryIdS, char *endGoodShareMemoryIdS) {
 
     char *p;
     int configShareMemoryId = strtol(configShareMemoryIdString, &p, 10);
-    
-    goodAnalyzerSharedMemoryId = strtol(goodAnalyzerShareMemoryIdString, &p, 10);
-    portAnalyzerSharedMemoryId = strtol(portAnalyzerShareMemoryIdString, &p, 10);
+    int goodAnalyzerSharedMemoryId = strtol(goodAnalyzerShareMemoryIdString, &p, 10);
+    int portAnalyzerSharedMemoryId = strtol(portAnalyzerShareMemoryIdString, &p, 10);
+    int acknowledgeInitShareMemoryId = strtol(acknowledgeInitShareMemoryIdS, &p, 10);
+    int endGoodShareMemoryId = strtol(endGoodShareMemoryIdS, &p, 10);
     
     configArr = (int*) shmat(configShareMemoryId, NULL, 0);
     if (configArr == (void*) -1) {
@@ -141,15 +146,40 @@ int initializeConfig(char *configShareMemoryIdString, char *goodAnalyzerShareMem
         return -1;
     }
 
+    goodDumpArr = (goodDailyDump*) shmat(goodAnalyzerSharedMemoryId, NULL, 0);
+    if (goodDumpArr == (void*) -1) {
+        handleErrno("shmat()");
+        return -1;
+    }
+
+    portDumpArr = (portDailyDump*) shmat(portAnalyzerSharedMemoryId, NULL, 0);
+    if (portDumpArr == (void*) -1) {
+        handleErrno("shmat()");
+        return -1;
+    }
+
+    acknowledgeArr = (int*) shmat(acknowledgeInitShareMemoryId, NULL, 0);
+    if (acknowledgeArr == (void*) -1) {
+        handleErrno("shmat()");
+        return -1;
+    }
+
+    endGoodDumpArr = (goodEndDump*) shmat(endGoodShareMemoryId, NULL, 0);
+    if (endGoodDumpArr == (void*) -1) {
+        handleErrno("shmat()");
+        return -1;
+    }
+
+    endGoodSemaphore = sem_open(endGoodShareMemoryIdS, O_EXCL, 0600, 1);
+    if (endGoodSemaphore == SEM_FAILED) {
+        handleErrno("sem_open()");
+        return -1;
+    }
+
     return 0;
 }
 
-int initializePort(char *portIdString, char *portShareMemoryIdS, char *goodShareMemoryIdS, 
-    char *acknowledgeInitShareMemoryIdS, char *endGoodShareMemoryIdS) {
-    
-    char *p;
-    
-    acknowledgeInitShareMemoryId = strtol(acknowledgeInitShareMemoryIdS, &p, 10);
+int initializePort(char *portIdString, char *portShareMemoryIdS, char *goodShareMemoryIdS) {
 
     if (initializePortStruct(portIdString, portShareMemoryIdS) == -1) {
         handleError("Error occurred during init of port struct");
@@ -161,15 +191,13 @@ int initializePort(char *portIdString, char *portShareMemoryIdS, char *goodShare
         return -1;
     }
 
-    if (initializePortGoods(goodShareMemoryIdS, endGoodShareMemoryIdS) == -1) {
+    if (initializePortGoods(goodShareMemoryIdS) == -1) {
         handleError("Error occurred during init of goods");
         return -1;
     }
     
-    if (setAcknowledge() == -1) {
-        handleError("Acknowledge failed");
-        return -1;
-    }
+    /* Aknowledge finish init */
+    acknowledgeArr[port.id] = 1;
 
     return 0;
 }
@@ -224,7 +252,6 @@ int initializePortStruct(char *portIdString, char *portShareMemoryIdS) {
 
 int initializeExchangeGoods() {
 
-    Goods *arrStock, *arrRequest;
     int maxRequest, i;
 
     /* Generate shared memory for good stock */
@@ -234,13 +261,14 @@ int initializeExchangeGoods() {
         return -1;
     }
 
-    arrStock = (Goods*) shmat(goodStockShareMemoryId, NULL, 0);
-    if (arrStock == (void*) -1) {
+    goodStockArr = (Goods*) shmat(goodStockShareMemoryId, NULL, 0);
+    if (goodStockArr == (void*) -1) {
         handleErrno("shmat()");
         return -1;
     }
 
-    if (generateSemaphore(goodStockShareMemoryId) == -1) {
+    goodStockSemaphore = generateSemaphore(goodStockShareMemoryId);
+    if (goodStockSemaphore == (void*) -1) {
         handleError("Error during creation of semaphore for goods stock");
         return -1;
     }
@@ -252,13 +280,14 @@ int initializeExchangeGoods() {
         return -1;
     }
 
-    arrRequest = (Goods*) shmat(goodRequestShareMemoryId, NULL, 0);
-    if (arrRequest == (void*) -1) {
+    goodRequestArr = (Goods*) shmat(goodRequestShareMemoryId, NULL, 0);
+    if (goodRequestArr == (void*) -1) {
         handleErrno("shmat()");
         return -1;
     }
     
-    if (generateSemaphore(goodRequestShareMemoryId) == -1) {
+    goodRequestSemaphore = generateSemaphore(goodRequestShareMemoryId);
+    if (goodRequestSemaphore == (void*) -1) {
         handleError("Error during creation of semaphore for goods request");
         return -1;
     }
@@ -272,72 +301,29 @@ int initializeExchangeGoods() {
         goodInStock.loadInTon = 0;
         goodInStock.state = In_The_Port;
 
-        arrStock[i] = goodInStock;
+        goodStockArr[i] = goodInStock;
 
         goodRequested.id = i;
         goodRequested.loadInTon = maxRequest;
         goodRequested.state = In_The_Port;
 
-        arrRequest[i] = goodRequested;
-    }
-
-    if (shmdt(arrStock) == -1) {
-        handleErrno("shmdt()");
-        return -1;
-    }
-
-    if (shmdt(arrRequest) == -1) {
-        handleErrno("shmdt()");
-        return -1;
+        goodRequestArr[i] = goodRequested;
     }
 
     return 0;
 }
 
-int initializePortGoods(char *goodShareMemoryIdS, char *endGoodShareMemoryIdS) {
+int initializePortGoods(char *goodShareMemoryIdS) {
 
     int i, goodShareMemoryId;
 
     char *p;
-    Goods *arrMasterGood, *arrStock, *arrRequest; 
-    goodEndDump *arrEndGoodDump;
-    sem_t *endGoodSemaphore;
-    char semaphoreKey[12];
+    Goods *arrMasterGood; 
 
     goodShareMemoryId = strtol(goodShareMemoryIdS, &p, 10);
     arrMasterGood = (Goods*) shmat(goodShareMemoryId, NULL, 0);
     if (arrMasterGood == (void*) -1) {
         handleErrno("shmat()");
-        return -1;
-    }
-
-    arrStock = (Goods*) shmat(goodStockShareMemoryId, NULL, 0);
-    if (arrStock == (void*) -1) {
-        handleErrno("shmat()");
-        return -1;
-    }
-
-    arrRequest = (Goods*) shmat(goodRequestShareMemoryId, NULL, 0);
-    if (arrRequest == (void*) -1) {
-        handleErrno("shmat()");
-        return -1;
-    }
-
-    endGoodSharedMemoryId = strtol(endGoodShareMemoryIdS, &p, 10);
-    arrEndGoodDump = (goodEndDump*) shmat(endGoodSharedMemoryId, NULL, 0);
-    if (arrEndGoodDump == (void*) -1) {
-        handleErrno("shmat()");
-        return -1;
-    }
-
-    if (sprintf(semaphoreKey, "%d", endGoodSharedMemoryId) == -1) {
-        handleError("Error during conversion of the pid for semaphore to a string");
-        return -1;
-    }
-
-    endGoodSemaphore = sem_open(semaphoreKey, O_EXCL, 0600, 1);
-    if (endGoodSemaphore == SEM_FAILED) {
-        handleErrno("sem_open()");
         return -1;
     }
 
@@ -348,47 +334,27 @@ int initializePortGoods(char *goodShareMemoryIdS, char *endGoodShareMemoryIdS) {
 
         if (stockOrRequest == 0) {
             /* Fill stock */
-            arrStock[i].remaningDays = arrMasterGood[i].remaningDays;
-            arrStock[i].loadInTon = arrMasterGood[i].loadInTon;
-            arrRequest[i].loadInTon = 0;
-            arrStock[i].state = In_The_Port;
+            goodStockArr[i].remaningDays = arrMasterGood[i].remaningDays;
+            goodStockArr[i].loadInTon = arrMasterGood[i].loadInTon;
+            goodRequestArr[i].loadInTon = 0;
+            goodStockArr[i].state = In_The_Port;
             
             sem_wait(endGoodSemaphore);
-            arrEndGoodDump[i].totalInitNumber += arrStock[i].loadInTon;
+            endGoodDumpArr[i].totalInitNumber += goodStockArr[i].loadInTon;
             sem_post(endGoodSemaphore);
         } else {
             /* Fill request */
-            arrRequest[i].remaningDays = arrMasterGood[i].remaningDays;
-            arrRequest[i].loadInTon = arrMasterGood[i].loadInTon;
-            arrStock[i].loadInTon = 0;
-            arrRequest[i].state = In_The_Port;
+            goodRequestArr[i].remaningDays = arrMasterGood[i].remaningDays;
+            goodRequestArr[i].loadInTon = arrMasterGood[i].loadInTon;
+            goodStockArr[i].loadInTon = 0;
+            goodRequestArr[i].state = In_The_Port;
         }
 
-        arrStock[i].dailyExchange = 0;
-        arrRequest[i].dailyExchange = 0;
-    }
-
-    if (sem_close(endGoodSemaphore) < 0) {
-        handleErrno("sem_close()");
-        return -1;
-    }
-
-    if (shmdt(arrEndGoodDump) == -1) {
-        handleErrno("shmdt()");
-        return -1;
+        goodStockArr[i].dailyExchange = 0;
+        goodRequestArr[i].dailyExchange = 0;
     }
 
     if (shmdt(arrMasterGood) == -1) {
-        handleErrno("shmdt()");
-        return -1;
-    }
-
-    if (shmdt(arrStock) == -1) {
-        handleErrno("shmdt()");
-        return -1;
-    }
-
-    if (shmdt(arrRequest) == -1) {
         handleErrno("shmdt()");
         return -1;
     }
@@ -400,10 +366,6 @@ int work() {
 
     int maxQauys, i, j;
     int *queues[2];
-    Goods *arrStock;
-    goodEndDump *arrEndGoodDump;
-    sem_t *endGoodSemaphore;
-    char semaphoreKey[12];
 
     /* wait for simulation to start */
     if (waitForStart() != 0) {
@@ -537,48 +499,10 @@ int work() {
     free(queues[1]);
 
     /* End good dump */
-    arrStock = (Goods*) shmat(goodStockShareMemoryId, NULL, 0);
-    if (arrStock == (void*) -1) {
-        handleErrno("shmat()");
-        return -1;
-    }
-
-    arrEndGoodDump = (goodEndDump*) shmat(endGoodSharedMemoryId, NULL, 0);
-    if (arrEndGoodDump == (void*) -1) {
-        handleErrno("shmat()");
-        return -1;
-    }
-
-    if (sprintf(semaphoreKey, "%d", endGoodSharedMemoryId) == -1) {
-        handleError("Error during conversion of the pid for semaphore to a string");
-        return -1;
-    }
-
-    endGoodSemaphore = sem_open(semaphoreKey, O_EXCL, 0600, 1);
-    if (endGoodSemaphore == SEM_FAILED) {
-        handleErrno("sem_open()");
-        return -1;
-    }
-
     for (i = 0; i < configArr[SO_MERCI]; i++) {
         sem_wait(endGoodSemaphore);
-        arrEndGoodDump[i].inPort += arrStock[i].loadInTon;
+        endGoodDumpArr[i].inPort += goodStockArr[i].loadInTon;
         sem_post(endGoodSemaphore);
-    }
-
-    if (sem_close(endGoodSemaphore) < 0) {
-        handleErrno("sem_close()");
-        return -1;
-    }    
-
-    if (shmdt(arrEndGoodDump) == -1) {
-        handleErrno("shmdt()");
-        return -1;
-    }
-
-    if (shmdt(arrStock) == -1) {
-        handleErrno("shmdt()");
-        return -1;
     }
 
     return 0;
@@ -628,26 +552,9 @@ int freePendingMsgs() {
 
 int dumpData() {
     int i, totalGoodInStock, totalGoodRequested, goodReferenceId, totalDailyGoodsSold, totalDailyGoodsRecived;
-    Goods *arrStock, *arrRequest;
 
-    goodDailyDump *goodArr;
     goodDailyDump gdd;
-
-    portDailyDump *portArr;
     portDailyDump pdd;
-
-
-    arrStock = (Goods*) shmat(goodStockShareMemoryId, NULL, 0);
-    if (arrStock == (void*) -1) {
-        handleErrno("shmat()");
-        return -1;
-    }
-
-    arrRequest = (Goods*) shmat(goodRequestShareMemoryId, NULL, 0);
-    if (arrRequest == (void*) -1) {
-        handleErrno("shmat()");
-        return -1;
-    }
 
     /* Init data */
     totalGoodInStock = 0;
@@ -655,58 +562,41 @@ int dumpData() {
     totalDailyGoodsSold = 0;
     totalDailyGoodsRecived = 0;
     for (i = 0; i < configArr[SO_MERCI]; i++) {
-        if(arrStock[i].state != Expired_In_The_Port) {
-            totalGoodInStock += arrStock[i].loadInTon;
+        if(goodStockArr[i].state != Expired_In_The_Port) {
+            totalGoodInStock += goodStockArr[i].loadInTon;
         }
-        if(arrRequest[i].state != Expired_In_The_Port) {
-            totalGoodRequested += arrRequest[i].loadInTon;
+        if(goodRequestArr[i].state != Expired_In_The_Port) {
+            totalGoodRequested += goodRequestArr[i].loadInTon;
         }
         
-        totalDailyGoodsSold += arrStock[i].dailyExchange;        
-        totalDailyGoodsRecived += arrRequest[i].dailyExchange;
+        totalDailyGoodsSold += goodStockArr[i].dailyExchange;        
+        totalDailyGoodsRecived += goodRequestArr[i].dailyExchange;
     }
 
     /* Send goods data */
     goodReferenceId = port.id * configArr[SO_MERCI];
-    goodArr = (goodDailyDump*) shmat(goodAnalyzerSharedMemoryId, NULL, 0);
-    if (goodArr == (void*) -1) {
-        handleErrno("shmat()");
-        return -1;
-    }
-
     for (i = 0; i < configArr[SO_MERCI]; i++) {
         
         gdd.goodId = i;
-        if (arrStock[i].state == Expired_In_The_Port) {
-            gdd.Good_Expired_In_The_Port = arrStock[i].loadInTon;
+        if (goodStockArr[i].state == Expired_In_The_Port) {
+            gdd.Good_Expired_In_The_Port = goodStockArr[i].loadInTon;
             
-            arrStock[i].loadInTon = 0;
-            arrStock[i].state = Undefined;
+            goodStockArr[i].loadInTon = 0;
+            goodStockArr[i].state = Undefined;
         } else {
             gdd.Good_Expired_In_The_Port = 0;
         }
 
-        gdd.Good_In_The_Port = arrStock[i].loadInTon;
-        gdd.Good_Delivered = arrRequest[i].dailyExchange;
+        gdd.Good_In_The_Port = goodStockArr[i].loadInTon;
+        gdd.Good_Delivered = goodRequestArr[i].dailyExchange;
 
         gdd.Good_Expired_In_The_Boat = 0;
         gdd.Good_In_The_Boat = 0;
 
-        memcpy(&goodArr[goodReferenceId + i], &gdd, sizeof(goodDailyDump)); 
-    }
-
-    if (shmdt(goodArr) == -1) {
-        handleErrno("shmdt()");
-        return -1;
+        memcpy(&goodDumpArr[goodReferenceId + i], &gdd, sizeof(goodDailyDump)); 
     }
 
     /* Send port data */
-    portArr = (portDailyDump*) shmat(portAnalyzerSharedMemoryId, NULL, 0);
-    if (portArr == (void*) -1) {
-        handleErrno("shmat()");
-        return -1;
-    }
-
     pdd.id = port.id;
     pdd.totalGoodInStock = totalGoodInStock;
     pdd.totalGoodRequested = totalGoodRequested;
@@ -715,27 +605,10 @@ int dumpData() {
     pdd.totalQuays = port.quays;
     pdd.busyQuays = port.quays - port.availableQuays;
 
-    portArr[port.id] = pdd;
+    portDumpArr[port.id] = pdd;
 
-    if (shmdt(portArr) == -1) {
-        handleErrno("shmdt()");
-        return -1;
-    }
-
-    if (shmdt(arrStock) == -1) {
-        handleErrno("shmdt()");
-        return -1;
-    }
-
-    if (shmdt(arrRequest) == -1) {
-        handleErrno("shmdt()");
-        return -1;
-    }
-
-    if (setAcknowledge() == -1) {
-        handleError("Acknowledge failed");
-        return -1;
-    }
+    /* Acknowledge end of data dump */
+    acknowledgeArr[port.id] = 1;
 
     return 0;
 }
@@ -754,77 +627,24 @@ int waitForNewDay() {
 int newDay() {
     
     int i;
-    Goods *arrStock, *arrRequest;
     char buffer[128];
-    goodEndDump *arrEndGoodDump;
-    sem_t *endGoodSemaphore;
-    char semaphoreKey[12];
-
-    arrStock = (Goods*) shmat(goodStockShareMemoryId, NULL, 0);
-    if (arrStock == (void*) -1) {
-        handleErrno("shmat()");
-        return -1;
-    }
-
-    arrRequest = (Goods*) shmat(goodRequestShareMemoryId, NULL, 0);
-    if (arrRequest == (void*) -1) {
-        handleErrno("shmat()");
-        return -1;
-    }
-
-    arrEndGoodDump = (goodEndDump*) shmat(endGoodSharedMemoryId, NULL, 0);
-    if (arrEndGoodDump == (void*) -1) {
-        handleErrno("shmat()");
-        return -1;
-    }
-
-    if (sprintf(semaphoreKey, "%d", endGoodSharedMemoryId) == -1) {
-        handleError("Error during conversion of the pid for semaphore to a string");
-        return -1;
-    }
-
-    endGoodSemaphore = sem_open(semaphoreKey, O_EXCL, 0600, 1);
-    if (endGoodSemaphore == SEM_FAILED) {
-        handleErrno("sem_open()");
-        return -1;
-    }
 
     /* TODO nel mentre che avviene uno scambio con una nave, se la merce scade allora la nave la conta come da se e anche il porto */
     for (i = 0; i < configArr[SO_MERCI]; i++) {
-        if(arrStock[i].remaningDays > 0) {
-            arrStock[i].remaningDays--;
-            if (arrStock[i].remaningDays == 0) {
-                arrStock[i].state = Expired_In_The_Port;
+        if(goodStockArr[i].remaningDays > 0) {
+            goodStockArr[i].remaningDays--;
+            if (goodStockArr[i].remaningDays == 0) {
+                goodStockArr[i].state = Expired_In_The_Port;
 
                 sem_wait(endGoodSemaphore);
-                arrEndGoodDump[i].expiredInPort += arrStock[i].loadInTon;
+                endGoodDumpArr[i].expiredInPort += goodStockArr[i].loadInTon;
                 sem_post(endGoodSemaphore);
             }
         }
 
         /* reset daily exchanges */
-        arrStock[i].dailyExchange = 0;
-        arrRequest[i].dailyExchange = 0;
-    }
-
-    if (sem_close(endGoodSemaphore) < 0) {
-        handleErrno("sem_close()");
-        return -1;
-    }
-
-    if (shmdt(arrEndGoodDump) == -1) {
-        handleErrno("shmdt()");
-        return -1;
-    }
-
-    if (shmdt(arrStock) == -1) {
-        handleErrno("shmdt()");
-        return -1;
-    }
-
-    if (shmdt(arrRequest) == -1) {
-        handleErrno("shmdt()");
-        return -1;
+        goodStockArr[i].dailyExchange = 0;
+        goodRequestArr[i].dailyExchange = 0;
     }
 
     snprintf(buffer, sizeof(buffer), "Port %d, free quays %d/%d", port.id, port.availableQuays, port.quays);
@@ -914,54 +734,11 @@ int handlePA_RQ_GOOD(int queueId) {
 
 int handlePA_RQ_SUMMARY(int goodId, int exchangeQuantity) {
 
-    Goods *arrStock;
-    goodEndDump *arrEndGoodDump;
-    sem_t *endGoodSemaphore;
-    char semaphoreKey[12];
-
-    arrStock = (Goods*) shmat(goodStockShareMemoryId, NULL, 0);
-    if (arrStock == (void*) -1) {
-        handleErrno("shmat()");
-        return -1;
-    }
-
-    arrEndGoodDump = (goodEndDump*) shmat(endGoodSharedMemoryId, NULL, 0);
-    if (arrEndGoodDump == (void*) -1) {
-        handleErrno("shmat()");
-        return -1;
-    }
-
-    if (sprintf(semaphoreKey, "%d", endGoodSharedMemoryId) == -1) {
-        handleError("Error during conversion of the pid for semaphore to a string");
-        return -1;
-    }
-
-    endGoodSemaphore = sem_open(semaphoreKey, O_EXCL, 0600, 1);
-    if (endGoodSemaphore == SEM_FAILED) {
-        handleErrno("sem_open()");
-        return -1;
-    }
-
-    arrStock[goodId].dailyExchange += exchangeQuantity;
+    goodStockArr[goodId].dailyExchange += exchangeQuantity;
     
     sem_wait(endGoodSemaphore);
-    arrEndGoodDump[goodId].exchanged += exchangeQuantity;
+    endGoodDumpArr[goodId].exchanged += exchangeQuantity;
     sem_post(endGoodSemaphore);
-
-    if (sem_close(endGoodSemaphore) < 0) {
-        handleErrno("sem_close()");
-        return -1;
-    }
-
-    if (shmdt(arrEndGoodDump) == -1) {
-        handleErrno("shmdt()");
-        return -1;
-    }
-
-    if (shmdt(arrStock) == -1) {
-        handleErrno("shmdt()");
-        return -1;
-    }
 
     return 0;
 }
@@ -991,48 +768,64 @@ int generateShareMemory(int sizeOfSegment) {
 
 /* Generate a semaphore */
 /* https://stackoverflow.com/questions/32205396/share-posix-semaphore-among-multiple-processes */
-int generateSemaphore(int semKey) {
+sem_t *generateSemaphore(int semKey) {
 
     char semaphoreKey[12];
     sem_t *semaphore;
 
     if (sprintf(semaphoreKey, "%d", semKey) == -1) {
         handleError("Error during conversion of the pid for semaphore to a string");
-        return -1;
+        return (sem_t*) -1;
     }   
 
     semaphore = sem_open(semaphoreKey, O_CREAT, 0600, 1);
     if (semaphore == SEM_FAILED) {
         handleErrno("sem_open()");
-        return -1;
+        return (sem_t*) -1;
     }
 
-    return 0;
+    return semaphore;
 }
 
-int setAcknowledge() {
-    
-    int *acknowledgeArr;
+/*
+goodDailyDump *goodDumpArr; 
+portDailyDump *portDumpArr; 
+int *acknowledgeArr;
+goodEndDump *endGoodDumpArr;
+sem_t *endGoodSemaphore; 
 
-    acknowledgeArr = (int*) shmat(acknowledgeInitShareMemoryId, NULL, 0);
-    if (acknowledgeArr == (void*) -1) {
-        handleErrno("shmat()");
-        return -1;
-    }
+Port port;
 
-    acknowledgeArr[port.id] = 1;
+Goods *goodStockArr;
+sem_t *goodStockSemaphore;
 
-    if (shmdt(acknowledgeArr) == -1) {
+Goods *goodRequestArr;
+sem_t *goodRequestSemaphore;
+*/
+ 
+int cleanup() {
+
+    if (shmdt(configArr) == -1) {
         handleErrno("shmdt()");
         return -1;
     }
 
-    return 0;
-}
+    if (shmdt(goodDumpArr) == -1) {
+        handleErrno("shmdt()");
+        return -1;
+    }
 
-int cleanup() {
+    if (shmdt(portDumpArr) == -1) {
+        handleErrno("shmdt()");
+        return -1;
+    }
+     
+    if (shmdt(endGoodDumpArr) == -1) {
+        handleErrno("shmdt()");
+        return -1;
+    }
 
-    if (shmdt(configArr) == -1) {
+    if (sem_close(endGoodSemaphore) == -1) {
         handleErrno("shmdt()");
         return -1;
     }
@@ -1047,8 +840,18 @@ int cleanup() {
         return -1;
     }
 
+    if (sem_close(goodStockSemaphore) == -1) {
+        handleErrno("sem_close()");
+        return -1;
+    }
+
     if (shmctl(goodRequestShareMemoryId, IPC_RMID, NULL) == -1) {
         handleErrno("msgctl()");
+        return -1;
+    }
+
+    if (sem_close(goodRequestSemaphore) == -1) {
+        handleErrno("sem_close()");
         return -1;
     }
 
