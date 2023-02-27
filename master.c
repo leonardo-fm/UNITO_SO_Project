@@ -302,6 +302,9 @@ void setMask() {
     sigfillset(&sigMask);
     sigdelset(&sigMask, SIGINT);
     sigprocmask(SIG_SETMASK, &sigMask, NULL);
+
+    /* If i don't set the group it will not register the ctrl + c in the console */
+    setpgid(getpid(), getppid());
 }
 
 int work() {
