@@ -16,46 +16,43 @@
 #include "lib/msgPortProtocol.h"
 #include "lib/utilities.h"
 
-int *configArr;
+int *configArr = 0;
 
-int goodAnalyzerSharedMemoryId;
-goodDailyDump *goodDumpArr;
+int goodAnalyzerSharedMemoryId = 0;
+goodDailyDump *goodDumpArr = 0;
 
-int boatAnalyzerSharedMemoryId; 
-boatDailyDump *boatDumpArr;
+int boatAnalyzerSharedMemoryId = 0; 
+boatDailyDump *boatDumpArr = 0;
 
-int portAnalyzerSharedMemoryId;
-portDailyDump *portDumpArr;
+int portAnalyzerSharedMemoryId = 0;
+portDailyDump *portDumpArr = 0;
 
-int acknowledgeShareMemoryId;
-int *acknowledgeArr;
+int *acknowledgeInitArr = 0;
 
-int endGoodSharedMemoryId; 
-goodEndDump *endGoodArr;
+int acknowledgeDumpShareMemoryId = 0;
+int *acknowledgeDumpArr = 0;
+
+int endGoodSharedMemoryId = 0; 
+goodEndDump *endGoodArr = 0;
+
+int readingMsgQueue = 0;
+int writingMsgQueue = 0;
 
 /* Malloc */
 int *endPortArr; 
-
-int readingMsgQueue;
-int writingMsgQueue;
-
 char *logPath;
+
 FILE *filePointer;
 
 int currentDay = 0;
 int simulationRunning = 1;
 int simulationFinishedEarly = 0;
+int masterPid = 0;
 
 void handle_analyzer_simulation_signals(int signal) {
 
-    /* TODO Masks? */
     switch (signal)
     {
-        case SIGUSR1:
-        case SIGUSR2:
-        case SIGCONT:
-            break;
-
         /* End of the simulation */
         case SIGSYS:
             simulationRunning = 0;
@@ -79,7 +76,7 @@ void handle_analyzer_stopProcess() {
 }
 
 /* argv[0]=id | argv[1]=ganalizersh | argv[2]=banalyzersh | argv[3]=panalyzersh | 
-    argv[4]=wmsgq | argv[5]=rmsgq | argv[6]=endanalyzershm, argv[7]=akish */
+    argv[4]=wmsgq | argv[5]=rmsgq | argv[6]=endanalyzershm, argv[7]=akish | argv[7]=akdsh */
 int main(int argx, char *argv[]) {
 
     (void) argx;
@@ -90,7 +87,7 @@ int main(int argx, char *argv[]) {
         safeExit(1);
     }
 
-    if (initializeAnalyzer(argv[1], argv[2], argv[3], argv[4], argv[5], argv[6], argv[7]) == -1) {
+    if (initializeAnalyzer(argv[1], argv[2], argv[3], argv[4], argv[5], argv[6], argv[7], argv[8]) == -1) {
         handleError("Initialization of analyzer failed");
         safeExit(2);
     }
@@ -99,6 +96,9 @@ int main(int argx, char *argv[]) {
         handleError("Error during analyzer work");
         safeExit(3);
     }
+
+    /* Acknowledge finish */
+    acknowledgeInitArr[configArr[SO_PORTI] + configArr[SO_NAVI]] = 1;
 
     if (cleanup() == -1) {
         handleError("Analyzer cleanup failed");
@@ -110,23 +110,19 @@ int main(int argx, char *argv[]) {
 
 int initializeSingalsHandlers() {
 
-    struct sigaction signalAction;
+    sigset_t sigMask;
 
     setpgid(getpid(), getppid());
+    masterPid = getppid();
 
-    signal(SIGUSR1, handle_analyzer_simulation_signals);
-
-    /* Use different method because i need to use the handler multiple times */
-    signalAction.sa_flags = SA_RESTART;
-    signalAction.sa_handler = &handle_analyzer_simulation_signals;
-    sigaction(SIGUSR2, &signalAction, NULL);
-    
-    signalAction.sa_flags = SA_RESTART;
-    signalAction.sa_handler = &handle_analyzer_simulation_signals;
-    sigaction(SIGCONT, &signalAction, NULL);
+    /* Mask all signals except SIGINT and SIGKILL */
+    sigfillset(&sigMask);
+    sigdelset(&sigMask, SIGINT);
+    sigdelset(&sigMask, SIGKILL);
+    sigdelset(&sigMask, SIGSYS);
+    sigprocmask(SIG_SETMASK, &sigMask, NULL);
 
     signal(SIGSYS, handle_analyzer_simulation_signals);
-    signal(SIGINT, handle_analyzer_stopProcess);
 
     return 0;
 }
@@ -147,10 +143,11 @@ int initializeConfig(char *configShareMemoryIdString) {
 
 int initializeAnalyzer(char *goodAnalyzerShareMemoryIdString, char *boatAnalyzerShareMemoryIdString, 
     char *portAnalyzerShareMemoryIdString, char *wmsgq, char *rmsgq, char *endGoodShareMemoryIdString,
-    char *acknowledgeShareMemoryIdString) {
+    char *acknowledgeInitShareMemoryIdString, char *acknowledgeDumpShareMemoryIdString) {
 
     char *p;
     int size = sizeof(int) * configArr[SO_PORTI] * 2;
+    int acknowledgeInitShareMemoryId = strtol(acknowledgeInitShareMemoryIdString, &p, 10);
 
     goodAnalyzerSharedMemoryId = strtol(goodAnalyzerShareMemoryIdString, &p, 10);
     goodDumpArr = (goodDailyDump*) shmat(goodAnalyzerSharedMemoryId, NULL, 0);
@@ -173,15 +170,21 @@ int initializeAnalyzer(char *goodAnalyzerShareMemoryIdString, char *boatAnalyzer
         return -1;
     }
 
-    acknowledgeShareMemoryId = strtol(acknowledgeShareMemoryIdString, &p, 10);
-    acknowledgeArr = (int*) shmat(acknowledgeShareMemoryId, NULL, 0);
+    endGoodSharedMemoryId = strtol(endGoodShareMemoryIdString, &p, 10);
+    endGoodArr = (goodEndDump*) shmat(endGoodSharedMemoryId, NULL, 0);
     if (goodDumpArr == (void*) -1) {
         handleErrno("shmat()");
         return -1;
     }
 
-    endGoodSharedMemoryId = strtol(endGoodShareMemoryIdString, &p, 10);
-    endGoodArr = (goodEndDump*) shmat(endGoodSharedMemoryId, NULL, 0);
+    acknowledgeInitArr = (int*) shmat(acknowledgeInitShareMemoryId, NULL, 0);
+    if (acknowledgeInitArr == (void*) -1) {
+        handleErrno("shmat()");
+        return -1;
+    }
+
+    acknowledgeDumpShareMemoryId = strtol(acknowledgeDumpShareMemoryIdString, &p, 10);
+    acknowledgeDumpArr = (int*) shmat(acknowledgeDumpShareMemoryId, NULL, 0);
     if (goodDumpArr == (void*) -1) {
         handleErrno("shmat()");
         return -1;
@@ -194,6 +197,9 @@ int initializeAnalyzer(char *goodAnalyzerShareMemoryIdString, char *boatAnalyzer
     memset(endPortArr, 0, size);
 
     createLogFile();
+
+    /* Acknowledge finish init */
+    acknowledgeInitArr[configArr[SO_PORTI] + configArr[SO_NAVI]] = 1;
 
     return 0;
 }
@@ -273,6 +279,10 @@ int waitForStart() {
 int work() {
 
     filePointer = fopen(logPath, "a");
+    if (filePointer == NULL) {
+        handleError("Error opening file");
+        return -1;
+    }
 
     /* wait for simulation to start */
     if (waitForStart() != 0) {
@@ -280,8 +290,9 @@ int work() {
         return -1;
     }
 
-    if (filePointer == NULL) {
-        handleError("Error opening file");
+    /* Not execute on first day */
+    if (sendMessage(writingMsgQueue, PA_FINISH, -1, -1) == -1) {
+        handleError("Error during sendig of the PA_FINISH");
         return -1;
     }
 
@@ -308,11 +319,6 @@ int work() {
         }
         
         currentDay++;
-
-        if (sendMessage(writingMsgQueue, PA_FINISH, -1, -1) == -1) {
-            handleError("Error during sendig of the PA_FINISH");
-            return -1;
-        }
 
         if (waitForNewDay() != 0) {
             handleError("Error while waitnig for the new day by analyzer");
@@ -355,7 +361,7 @@ int checkDataDump() {
         for (i = 0; i < entities; i++)
         {
             /* Check if all goodId != 0 are set and not equal to 0 */
-            if (acknowledgeArr[i] == 0) {
+            if (acknowledgeDumpArr[i] == 0) {
                 snprintf(buffer, sizeof(buffer), "Failed check on %d", i);
                 debug(buffer);
                 allDataCollected = 0;
@@ -378,7 +384,7 @@ int checkDataDump() {
     }
 
     /* Reset acknowledge */
-    memset(acknowledgeArr, 0, entities);
+    memset(acknowledgeDumpArr, 0, entities);
 
     return 0;
 }
@@ -402,6 +408,12 @@ int generateDailyDump() {
 
     if (generateDailyPortReport() == -1) {
         handleError("Error while writing port report");
+        return -1;
+    }
+
+    /* notify master that have finish crunching data */
+    if (sendMessage(writingMsgQueue, PA_FINISH, -1, -1) == -1) {
+        handleError("Error during sendig of the PA_FINISH");
         return -1;
     }
 
@@ -605,67 +617,72 @@ int cleanup() {
     free(logPath);
     free(endPortArr);
 
-    if (shmdt(configArr) == -1) {
+    if (configArr != 0 && shmdt(configArr) == -1) {
         handleErrno("shmdt()");
         return -1;
     }
 
-    if (shmdt(goodDumpArr) == -1) {
+    if (goodDumpArr != 0 && shmdt(goodDumpArr) == -1) {
         handleErrno("shmdt()");
         return -1;
     }
 
-    if (shmctl(goodAnalyzerSharedMemoryId, IPC_RMID, NULL) == -1) {
+    if (goodAnalyzerSharedMemoryId != 0 && shmctl(goodAnalyzerSharedMemoryId, IPC_RMID, NULL) == -1) {
         handleErrno("shmctl()");
         return -1;
     }
 
-    if (shmdt(boatDumpArr) == -1) {
+    if (boatDumpArr != 0 && shmdt(boatDumpArr) == -1) {
         handleErrno("shmdt()");
         return -1;
     }
     
-    if (shmctl(boatAnalyzerSharedMemoryId, IPC_RMID, NULL) == -1) {
+    if (boatAnalyzerSharedMemoryId != 0 && shmctl(boatAnalyzerSharedMemoryId, IPC_RMID, NULL) == -1) {
         handleErrno("shmctl()");
         return -1;
     }
 
-    if (shmdt(portDumpArr) == -1) {
+    if (portDumpArr != 0 && shmdt(portDumpArr) == -1) {
         handleErrno("shmdt()");
         return -1;
     }
 
-    if (shmctl(portAnalyzerSharedMemoryId, IPC_RMID, NULL) == -1) {
+    if (portAnalyzerSharedMemoryId != 0 && shmctl(portAnalyzerSharedMemoryId, IPC_RMID, NULL) == -1) {
         handleErrno("shmctl()");
         return -1;
     }
 
-    if (shmdt(endGoodArr) == -1) {
+    if (endGoodArr != 0 && shmdt(endGoodArr) == -1) {
         handleErrno("shmdt()");
         return -1;
     }
 
-    if (shmctl(endGoodSharedMemoryId, IPC_RMID, NULL) == -1) {
+    if (endGoodSharedMemoryId != 0 && shmctl(endGoodSharedMemoryId, IPC_RMID, NULL) == -1) {
         handleErrno("shmctl()");
         return -1;
     }
 
-    if (msgctl(writingMsgQueue, IPC_RMID, NULL) == -1) {
+    if (writingMsgQueue != 0 && msgctl(writingMsgQueue, IPC_RMID, NULL) == -1) {
         handleErrno("msgctl()");
         return -1;
     }
 
-    if (msgctl(readingMsgQueue, IPC_RMID, NULL) == -1) {
+    if (readingMsgQueue != 0 && msgctl(readingMsgQueue, IPC_RMID, NULL) == -1) {
         handleErrno("msgctl()");
         return -1;
     }
 
-    if (shmdt(acknowledgeArr) == -1) {
+    if (acknowledgeInitArr != 0 && shmdt(acknowledgeInitArr) == -1) {
         handleErrno("shmdt()");
         return -1;
     }
 
-    if (shmctl(acknowledgeShareMemoryId, IPC_RMID, NULL) == -1) {
+    if (acknowledgeDumpArr != 0 && shmdt(acknowledgeDumpArr) == -1) {
+        handleErrno("shmdt()");
+        return -1;
+    }
+
+    if (acknowledgeDumpShareMemoryId != 0 && shmctl(acknowledgeDumpShareMemoryId, IPC_RMID, NULL) == -1) {
         handleErrno("shmctl()");
         return -1;
     }
@@ -679,7 +696,7 @@ void safeExit(int exitNumber) {
     
     fclose(filePointer);
     cleanup();
-    if (simulationRunning == 1) {
+    if (simulationRunning == 1 && masterPid == getppid()) {
         kill(getppid(), SIGINT);
     }
     exit(exitNumber);

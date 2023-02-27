@@ -23,9 +23,10 @@ int *configArr = 0;
 
 goodDailyDump *goodDumpArr = 0; 
 portDailyDump *portDumpArr = 0; 
-int *acknowledgeArr = 0;
+int *acknowledgeInitArr = 0;
+int *acknowledgeDumpArr = 0;
 goodEndDump *endGoodDumpArr = 0;
-sem_t *endGoodSemaphore = 0; 
+sem_t *endGoodDumpSemaphore = 0; 
 
 Port port = {-1, 0, 0, 0, {0, 0}};
 
@@ -38,6 +39,7 @@ Goods *goodRequestArr = 0;
 sem_t *goodRequestSemaphore = 0;
 
 int simulationRunning = 1;
+int masterPid = 0;
 
 void handle_port_simulation_signals(int signal) {
 
@@ -49,9 +51,17 @@ void handle_port_simulation_signals(int signal) {
 
         /* Wait for the new day to come */
         case SIGUSR2:
+            acknowledgeInitArr[port.id] = 1;
+            waitForDumpData();
+            acknowledgeInitArr[port.id] = 1;
             dumpData();
             waitForNewDay();
+            acknowledgeInitArr[port.id] = 1;
             newDay();
+            break;
+
+        /* Wait to dump data waitForDumpData() */
+        case SIGIO:
             break;
 
         /* Need to handle the signal for the waitForNewDay() */
@@ -64,6 +74,7 @@ void handle_port_simulation_signals(int signal) {
             simulationRunning = 0;
             stopWaitingQueues = 1;
             break;
+            
         default:
             handleError("Intercept a unhandled signal");
             break;
@@ -90,7 +101,7 @@ int main(int argx, char *argv[]) {
     initializeEnvironment();
     initializeSingalsHandlers();
 
-    if (initializeConfig(argv[1], argv[4], argv[5], argv[6], argv[7]) == -1) {
+    if (initializeConfig(argv[1], argv[4], argv[5], argv[6], argv[7], argv[8]) == -1) {
         handleError("Initialization of port config failed");
         safeExit(1);
     }
@@ -105,12 +116,14 @@ int main(int argx, char *argv[]) {
         safeExit(3);
     }
 
+    /* Aknowledge finish */
+    acknowledgeInitArr[port.id] = 1;
+
     if (cleanup() == -1) {
         handleError("Port cleanup failed");
         safeExit(4);
     }
 
-    printConsole("port exit");
     return 0;
 }
 
@@ -119,6 +132,7 @@ int initializeSingalsHandlers() {
     struct sigaction signalAction;
 
     setpgid(getpid(), getppid());
+    masterPid = getppid();
 
     signal(SIGUSR1, handle_port_simulation_signals);
 
@@ -126,6 +140,10 @@ int initializeSingalsHandlers() {
     signalAction.sa_flags = SA_RESTART;
     signalAction.sa_handler = &handle_port_simulation_signals;
     sigaction(SIGUSR2, &signalAction, NULL);
+
+    signalAction.sa_flags = SA_RESTART;
+    signalAction.sa_handler = &handle_port_simulation_signals;
+    sigaction(SIGIO, &signalAction, NULL);
 
     signalAction.sa_flags = SA_RESTART;
     signalAction.sa_handler = &handle_port_simulation_signals;
@@ -138,7 +156,8 @@ int initializeSingalsHandlers() {
 }
 
 int initializeConfig(char *configShareMemoryIdString, char *goodAnalyzerShareMemoryIdString, 
-    char *portAnalyzerShareMemoryIdString, char *acknowledgeInitShareMemoryIdS, char *endGoodShareMemoryIdS) {
+    char *portAnalyzerShareMemoryIdString, char *acknowledgeInitShareMemoryIdS, char *endGoodShareMemoryIdS,
+    char *acknowledgeDumpShareMemoryIdS) {
 
     char *p;
     int configShareMemoryId = strtol(configShareMemoryIdString, &p, 10);
@@ -146,6 +165,7 @@ int initializeConfig(char *configShareMemoryIdString, char *goodAnalyzerShareMem
     int portAnalyzerSharedMemoryId = strtol(portAnalyzerShareMemoryIdString, &p, 10);
     int acknowledgeInitShareMemoryId = strtol(acknowledgeInitShareMemoryIdS, &p, 10);
     int endGoodShareMemoryId = strtol(endGoodShareMemoryIdS, &p, 10);
+    int acknowledgeDumpShareMemoryId = strtol(acknowledgeDumpShareMemoryIdS, &p, 10);
     
     configArr = (int*) shmat(configShareMemoryId, NULL, 0);
     if (configArr == (void*) -1) {
@@ -165,8 +185,8 @@ int initializeConfig(char *configShareMemoryIdString, char *goodAnalyzerShareMem
         return -1;
     }
 
-    acknowledgeArr = (int*) shmat(acknowledgeInitShareMemoryId, NULL, 0);
-    if (acknowledgeArr == (void*) -1) {
+    acknowledgeInitArr = (int*) shmat(acknowledgeInitShareMemoryId, NULL, 0);
+    if (acknowledgeInitArr == (void*) -1) {
         handleErrno("shmat()");
         return -1;
     }
@@ -177,9 +197,15 @@ int initializeConfig(char *configShareMemoryIdString, char *goodAnalyzerShareMem
         return -1;
     }
 
-    endGoodSemaphore = sem_open(endGoodShareMemoryIdS, O_EXCL, 0600, 1);
-    if (endGoodSemaphore == SEM_FAILED) {
+    endGoodDumpSemaphore = sem_open(endGoodShareMemoryIdS, O_EXCL, 0600, 1);
+    if (endGoodDumpSemaphore == SEM_FAILED) {
         handleErrno("sem_open()");
+        return -1;
+    }
+
+    acknowledgeDumpArr = (int*) shmat(acknowledgeDumpShareMemoryId, NULL, 0);
+    if (acknowledgeDumpArr == (void*) -1) {
+        handleErrno("shmat()");
         return -1;
     }
 
@@ -203,8 +229,8 @@ int initializePort(char *portIdString, char *portShareMemoryIdS, char *goodShare
         return -1;
     }
     
-    /* Aknowledge finish init */
-    acknowledgeArr[port.id] = 1;
+    /* Aknowledge finish */
+    acknowledgeInitArr[port.id] = 1;
 
     return 0;
 }
@@ -346,9 +372,9 @@ int initializePortGoods(char *goodShareMemoryIdS) {
             goodRequestArr[i].loadInTon = 0;
             goodStockArr[i].state = In_The_Port;
             
-            sem_wait(endGoodSemaphore);
+            sem_wait(endGoodDumpSemaphore);
             endGoodDumpArr[i].totalInitNumber += goodStockArr[i].loadInTon;
-            sem_post(endGoodSemaphore);
+            sem_post(endGoodDumpSemaphore);
         } else {
             /* Fill request */
             goodRequestArr[i].remaningDays = arrMasterGood[i].remaningDays;
@@ -507,9 +533,9 @@ int work() {
 
     /* End good dump */
     for (i = 0; i < configArr[SO_MERCI]; i++) {
-        sem_wait(endGoodSemaphore);
+        sem_wait(endGoodDumpSemaphore);
         endGoodDumpArr[i].inPort += goodStockArr[i].loadInTon;
-        sem_post(endGoodSemaphore);
+        sem_post(endGoodDumpSemaphore);
     }
 
     return 0;
@@ -615,9 +641,20 @@ int dumpData() {
     portDumpArr[port.id] = pdd;
 
     /* Acknowledge end of data dump */
-    acknowledgeArr[port.id] = 1;
+    acknowledgeDumpArr[port.id] = 1;
 
     return 0;
+}
+
+int waitForDumpData() {
+
+    int sig, waitRes;
+    sigset_t sigset;
+
+    sigaddset(&sigset, SIGIO);
+    waitRes = sigwait(&sigset, &sig);
+
+    return waitRes;
 }
 
 int waitForNewDay() {
@@ -643,9 +680,9 @@ int newDay() {
             if (goodStockArr[i].remaningDays == 0) {
                 goodStockArr[i].state = Expired_In_The_Port;
 
-                sem_wait(endGoodSemaphore);
+                sem_wait(endGoodDumpSemaphore);
                 endGoodDumpArr[i].expiredInPort += goodStockArr[i].loadInTon;
-                sem_post(endGoodSemaphore);
+                sem_post(endGoodDumpSemaphore);
             }
         }
 
@@ -743,9 +780,9 @@ int handlePA_RQ_SUMMARY(int goodId, int exchangeQuantity) {
 
     goodStockArr[goodId].dailyExchange += exchangeQuantity;
     
-    sem_wait(endGoodSemaphore);
+    sem_wait(endGoodDumpSemaphore);
     endGoodDumpArr[goodId].exchanged += exchangeQuantity;
-    sem_post(endGoodSemaphore);
+    sem_post(endGoodDumpSemaphore);
 
     return 0;
 }
@@ -816,7 +853,7 @@ int cleanup() {
         return -1;
     }
 
-    if (endGoodSemaphore != 0 && sem_close(endGoodSemaphore) == -1) {
+    if (endGoodDumpSemaphore != 0 && sem_close(endGoodDumpSemaphore) == -1) {
         handleErrno("shmdt()");
         return -1;
     }
@@ -856,6 +893,16 @@ int cleanup() {
         return -1;
     }
 
+    if (acknowledgeInitArr != 0 && shmdt(acknowledgeInitArr) == -1) {
+        handleErrno("shmdt()");
+        return -1;
+    }
+
+    if (acknowledgeDumpArr != 0 && shmdt(acknowledgeDumpArr) == -1) {
+        handleErrno("shmdt()");
+        return -1;
+    }
+
     debug("Port clean");
 
     return 0;
@@ -864,7 +911,7 @@ int cleanup() {
 void safeExit(int exitNumber) {
 
     cleanup();
-    if (simulationRunning == 1) {
+    if (simulationRunning == 1 && masterPid == getppid()) {
         kill(getppid(), SIGINT);
     }
     exit(exitNumber);

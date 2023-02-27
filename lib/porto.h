@@ -1,6 +1,7 @@
 int initializeSingalsHandlers();
 int initializeConfig(char *configShareMemoryIdString, char *goodAnalyzerShareMemoryIdString, 
-    char *portAnalyzerShareMemoryIdString, char *acknowledgeInitShareMemoryIdS, char *endGoodShareMemoryIdS);
+    char *portAnalyzerShareMemoryIdString, char *acknowledgeInitShareMemoryIdS, char *endGoodShareMemoryIdS,
+    char *acknowledgeDumpShareMemoryIdS);
 int initializePort(char *portIdString, char *portShareMemoryIdS, char *goodShareMemoryIdS);
 int initializePortStruct(char *portIdString, char *portShareMemoryIdS);
 int initializeExchangeGoods();
@@ -8,6 +9,7 @@ int initializePortGoods(char *goodShareMemoryIdS);
 int work();
 int waitForStart();
 int dumpData();
+int waitForDumpData();
 int waitForNewDay();
 int freePendingMsgs();
 int newDay();

@@ -25,11 +25,13 @@ int goodSharedMemoryId = 0;
 int portSharedMemoryId = 0;
 
 int goodAnalyzerSharedMemoryId;
-int acknowledgeInitSharedMemoryId;
 int boatAnalyzerSharedMemoryId;
 int portAnalyzerSharedMemoryId;
-
 int endgoodAnalyzerSharedMemoryId;
+int acknowledgeDumpSharedMemoryId;
+
+int acknowledgeInitSharedMemoryId = 0;
+int *acknowledgeInitArr = 0;
 
 int analyzerReadingMsgQueue;
 int analyzerWritingMsgQueue;
@@ -44,7 +46,7 @@ void handle_master_stopProcess() {
     sigfillset(&mask);
     sigprocmask(SIG_BLOCK, &mask, NULL);
 
-    debug("\nStopping program...");
+    printConsole("\nStopping program...");
     killpg(getpid(), SIGINT);
     cleanup();
     exit(0);
@@ -52,11 +54,11 @@ void handle_master_stopProcess() {
 
 int main() {
 
-    int analyzerArgs[8];
-    int portArgs[7];
-    int boatArgs[6];
+    int analyzerArgs[9];
+    int portArgs[8];
+    int boatArgs[7];
 
-    setpgid(getpid(), getpid());
+    printConsole("Starting program...");
 
     /* ----- CONFIG ----- */
     configSharedMemoryId = generateSharedMemory(sizeof(int) * NUM_OF_SETTINGS);
@@ -77,9 +79,21 @@ int main() {
      
      
     /* ----- ALL ----- */
-    acknowledgeInitSharedMemoryId = generateSharedMemory(sizeof(int) * (configArr[SO_NAVI] + configArr[SO_PORTI]));
+    /* + 1 analyzer */
+    acknowledgeInitSharedMemoryId = generateSharedMemory(sizeof(int) * (configArr[SO_NAVI] + configArr[SO_PORTI] + 1));
     if (acknowledgeInitSharedMemoryId == -1) {
         safeExit(10);
+    }
+
+    acknowledgeInitArr = (int*) shmat(acknowledgeInitSharedMemoryId, NULL, 0);
+    if (acknowledgeInitArr == (void*) -1) {
+        handleErrno("shmat()");
+        return -1;
+    }
+
+    acknowledgeDumpSharedMemoryId = generateSharedMemory(sizeof(int) * (configArr[SO_NAVI] + configArr[SO_PORTI]));
+    if (acknowledgeDumpSharedMemoryId == -1) {
+        safeExit(19);
     }
 
 
@@ -121,7 +135,8 @@ int main() {
     analyzerArgs[5] = analyzerWritingMsgQueue;
     analyzerArgs[6] = endgoodAnalyzerSharedMemoryId;
     analyzerArgs[7] = acknowledgeInitSharedMemoryId;
-    if (generateSubProcesses(1, "./bin/analyzer", 0, analyzerArgs, 8) == -1) {
+    analyzerArgs[8] = acknowledgeDumpSharedMemoryId;
+    if (generateSubProcesses(1, "./bin/analyzer", 0, analyzerArgs, sizeof(analyzerArgs) / sizeof(analyzerArgs[0])) == -1) {
         safeExit(7);
     }
 
@@ -150,7 +165,8 @@ int main() {
     portArgs[4] = portAnalyzerSharedMemoryId;
     portArgs[5] = acknowledgeInitSharedMemoryId;
     portArgs[6] = endgoodAnalyzerSharedMemoryId;
-    if (generateSubProcesses(configArr[SO_PORTI], "./bin/porto", 1, portArgs, 7) == -1) {
+    portArgs[7] = acknowledgeDumpSharedMemoryId;
+    if (generateSubProcesses(configArr[SO_PORTI], "./bin/porto", 1, portArgs, sizeof(portArgs) / sizeof(portArgs[0])) == -1) {
         safeExit(12);
     }
 
@@ -162,7 +178,8 @@ int main() {
     boatArgs[3] = boatAnalyzerSharedMemoryId;
     boatArgs[4] = acknowledgeInitSharedMemoryId;
     boatArgs[5] = endgoodAnalyzerSharedMemoryId;
-    if (generateSubProcesses(configArr[SO_NAVI], "./bin/nave", 1, boatArgs, 6) == -1) {
+    boatArgs[6] = acknowledgeDumpSharedMemoryId;
+    if (generateSubProcesses(configArr[SO_NAVI], "./bin/nave", 1, boatArgs, sizeof(boatArgs) / sizeof(boatArgs[0])) == -1) {
         safeExit(13);
     }
 
@@ -233,17 +250,14 @@ int waitForAnalizerToCollectData() {
     return 0;
 }
 
-int acknowledgeChildrenStatus() {
+int acknowledgeChildrenStatus(int checkAnalyzerSatus) {
 
     double waitTimeInSeconds = 0.005;
     int allChildrenInit, i;
-    int *acknowledgeArr;
     int entities = configArr[SO_NAVI] + configArr[SO_PORTI];
 
-    acknowledgeArr = (int*) shmat(acknowledgeInitSharedMemoryId, NULL, 0);
-    if (acknowledgeArr == (void*) -1) {
-        handleErrno("shmat()");
-        return -1;
+    if (checkAnalyzerSatus == 1) {
+        entities++;
     }
 
     do
@@ -258,7 +272,7 @@ int acknowledgeChildrenStatus() {
 
         for (i = 0; i < entities; i++)
         {
-            if (acknowledgeArr[i] == 0) {
+            if (acknowledgeInitArr[i] == 0) {
                 debug("Failed init check");
                 allChildrenInit = 0;
                 break;
@@ -275,29 +289,37 @@ int acknowledgeChildrenStatus() {
     } while (allChildrenInit != 1);
 
     /* Reset acknowledge */
-    memset(acknowledgeArr, 0, entities);
-
-    if (shmdt(acknowledgeArr) == -1) {
-        handleErrno("shmdt()");
-        return -1;
-    }
+    memset(acknowledgeInitArr, 0, entities);
 
     return 0;
+}
+
+void setMask() {
+
+    sigset_t sigMask;
+
+    /* Mask all signals except SIGINT and SIGKILL */
+    sigfillset(&sigMask);
+    sigdelset(&sigMask, SIGINT);
+    sigdelset(&sigMask, SIGKILL);
+    sigprocmask(SIG_SETMASK, &sigMask, NULL);
 }
 
 int work() {
 
     int simulationDays = 0;
 
-    if (acknowledgeChildrenStatus() == -1) {
+    /* Set the mask after initialized children */
+    setMask();
+
+    if (acknowledgeChildrenStatus(1) == -1) {
         handleError("Error while waiting for children to be initialized");
         return -1;
     }
 
-    /* Set the current group different from itselfe to avoid interupt from custom signals */
-    setpgid(getpid(), getppid());
-
+    /* Start simulation [boat, port, analyzer] */
     killpg(getpid(), SIGUSR1);
+    debug("Sended SIGUSR1");
 
     while (simulationDays < configArr[SO_DAYS] && simulationFinishedEarly == 0)
     {
@@ -308,6 +330,7 @@ int work() {
 
         simulationDays++;
 
+        /* Wait for the day (1 second) */
         if (safeWait(1, 0l) == -1) {
             handleError("Error while waiting next day master");
             return -1;
@@ -315,43 +338,62 @@ int work() {
 
         if (simulationDays < configArr[SO_DAYS] && simulationFinishedEarly == 0) {
 
-            if (killpg(getpid(), SIGUSR2) == -1) {
-                handleErrno("killpg()");
+            /* Stop all the process */
+            killpg(getpid(), SIGUSR2);
+            debug("Sended SIGUSR2");
+
+            if (acknowledgeChildrenStatus(0) == -1) {
+                handleError("Error while waiting for children to SIGUSR2");
                 return -1;
             }
 
-            /* Salta il primo giorno */
-            if (simulationDays > 1) {
+            /* Wait fo the analyzer to finish the job and check if simulation must end earlier */
+            checkForAnalizerToFinish();
 
-                checkForAnalizerToFinish();
+            /* Dump the data [boat, port] */
+            killpg(getpid(), SIGIO);
+            debug("Sended SIGIO");
+
+            if (acknowledgeChildrenStatus(0) == -1) {
+                handleError("Error while waiting for children to SIGIO");
+                return -1;
             }
-
+            
             if (sendMessage(analyzerWritingMsgQueue, PA_NEW_DAY, -1, -1) == -1) {
                 handleError("Error during sendig of the PA_NEW_DAY");
                 return -1;
             }
 
+            /* Wait fo the boats and ports to dump data [analyzer] */
             waitForAnalizerToCollectData();
 
-            if (simulationFinishedEarly == 0) {
-                killpg(getpid(), SIGCONT);
+            /* Coontiue the simulation */
+            killpg(getpid(), SIGCONT);
+            debug("Sended SIGCONT");
+
+            if (acknowledgeChildrenStatus(0) == -1) {
+                handleError("Error while waiting for children to SIGCONT");
+                return -1;
             }
         }
     }
 
     killpg(getpid(), SIGSYS);
+    debug("Sended SUGSYS");
 
-    if (acknowledgeChildrenStatus() == -1) {
-        handleError("Error while waiting for children to finish");
-        safeExit(14);
-    }
-
-    if (sendMessage(analyzerWritingMsgQueue, PA_NEW_DAY, -1, -1) == -1) {
-        handleError("Error during sendig of the PA_NEW_DAY finish");
-        return -1;
+    if (simulationFinishedEarly == 0) {
+        if (sendMessage(analyzerWritingMsgQueue, PA_NEW_DAY, -1, -1) == -1) {
+            handleError("Error during sendig of the PA_NEW_DAY finish");
+            return -1;
+        }
     }
 
     printConsole("Simulation finished");
+
+    if (acknowledgeChildrenStatus(1) == -1) {
+        handleError("Error while waiting for children to finish");
+        return -1;
+    }
 
     return 0;
 }
@@ -412,7 +454,7 @@ int generateSubProcesses(int nOfProcess, char *execFilePath, int includeProcedur
     if(nOfProcess <= 0) {
         return 0;
     }
-
+    
     arraySize = argSize + includeProceduralId + 1;
     args = malloc(sizeof(char *) * arraySize);
     for (i = 0; i < arraySize; i++) {
@@ -534,6 +576,16 @@ int cleanup() {
     }
     
     if (portSharedMemoryId != 0 && shmctl(portSharedMemoryId, IPC_RMID, NULL) == -1) {
+        handleErrno("shmctl()");
+        return -1;
+    }
+
+    if (acknowledgeInitArr != 0 && shmdt(acknowledgeInitArr) == -1) {
+        handleErrno("shmdt()");
+        return -1;
+    }
+
+    if (acknowledgeInitArr != 0 && shmctl(acknowledgeInitSharedMemoryId, IPC_RMID, NULL) == -1) {
         handleErrno("shmctl()");
         return -1;
     }
