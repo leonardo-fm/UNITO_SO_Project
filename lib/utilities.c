@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <math.h>
 #include <errno.h>
+#include <signal.h>
 
 #include "models.h"
 #include "customMacro.h"
@@ -124,4 +125,15 @@ int safeWait(int timeToSleepSec, long timeToSleepNs) {
     }
 
     return 0;
+}
+
+int waitForSignal(int signal) {
+
+    int sig, waitRes;
+    sigset_t sigset;
+
+    sigaddset(&sigset, signal);
+    waitRes = sigwait(&sigset, &sig);
+
+    return waitRes;
 }

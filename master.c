@@ -39,8 +39,8 @@ int analyzerWritingMsgQueue;
 int currentProcessId;
 int simulationFinishedEarly = 0;
 
-void handle_master_stopProcess() { 
-
+void handle_master_stopProcess() {
+    
     /* Block all incoming signals after the first SIGINT */
     sigset_t mask;
     sigfillset(&mask);
@@ -79,8 +79,8 @@ int main() {
      
      
     /* ----- ALL ----- */
-    /* + 1 analyzer */
-    acknowledgeInitSharedMemoryId = generateSharedMemory(sizeof(int) * (configArr[SO_NAVI] + configArr[SO_PORTI] + 1));
+    acknowledgeInitSharedMemoryId = 
+        generateSharedMemory(sizeof(int) * (configArr[SO_NAVI] + configArr[SO_PORTI] + 1)); /* +1 analyzer */
     if (acknowledgeInitSharedMemoryId == -1) {
         safeExit(10);
     }
@@ -201,7 +201,7 @@ int initializeSingalsHandlers() {
     setpgrp();
 
     signal(SIGINT, handle_master_stopProcess);
-
+    
     return 0;
 }
 
@@ -298,10 +298,9 @@ void setMask() {
 
     sigset_t sigMask;
 
-    /* Mask all signals except SIGINT and SIGKILL */
+    /* Mask all signals except SIGINT */
     sigfillset(&sigMask);
     sigdelset(&sigMask, SIGINT);
-    sigdelset(&sigMask, SIGKILL);
     sigprocmask(SIG_SETMASK, &sigMask, NULL);
 }
 

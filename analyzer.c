@@ -115,10 +115,9 @@ int initializeSingalsHandlers() {
     setpgid(getpid(), getppid());
     masterPid = getppid();
 
-    /* Mask all signals except SIGINT and SIGKILL */
+    /* Mask all signals except SIGINT and SIGSYS */
     sigfillset(&sigMask);
     sigdelset(&sigMask, SIGINT);
-    sigdelset(&sigMask, SIGKILL);
     sigdelset(&sigMask, SIGSYS);
     sigprocmask(SIG_SETMASK, &sigMask, NULL);
 
@@ -265,17 +264,6 @@ int waitForNewDay() {
     return 0;
 }
 
-int waitForStart() {
-
-    int sig, waitRes;
-    sigset_t sigset;
-
-    sigaddset(&sigset, SIGUSR1);
-    waitRes = sigwait(&sigset, &sig);
-
-    return waitRes;
-}
-
 int work() {
 
     filePointer = fopen(logPath, "a");
@@ -285,7 +273,7 @@ int work() {
     }
 
     /* wait for simulation to start */
-    if (waitForStart() != 0) {
+    if (waitForSignal(SIGUSR1) != 0) {
         handleError("Error while waiting for start");
         return -1;
     }

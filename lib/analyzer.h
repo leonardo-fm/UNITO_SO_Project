@@ -6,7 +6,6 @@ int initializeAnalyzer(char *goodAnalyzerShareMemoryIdString,
     char *acknowledgeDumpShareMemoryIdString);
 int createLogFile();
 int waitForNewDay();
-int waitForStart();
 int work();
 int checkDataDump();
 int generateDailyDump();

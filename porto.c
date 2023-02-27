@@ -45,31 +45,22 @@ void handle_port_simulation_signals(int signal) {
 
     switch (signal)
     {
-        /* Start of the simulation */
-        case SIGUSR1:
+        case SIGUSR1: /* Start simulation */
+        case SIGIO: /* Dump data */
+        case SIGCONT: /* Continue fimulation */
             break;
 
-        /* Wait for the new day to come */
-        case SIGUSR2:
+        case SIGUSR2: /* Stop simulation */
             acknowledgeInitArr[port.id] = 1;
-            waitForDumpData();
+            waitForSignal(SIGIO);
             acknowledgeInitArr[port.id] = 1;
             dumpData();
-            waitForNewDay();
+            waitForSignal(SIGCONT);
             acknowledgeInitArr[port.id] = 1;
             newDay();
             break;
 
-        /* Wait to dump data waitForDumpData() */
-        case SIGIO:
-            break;
-
-        /* Need to handle the signal for the waitForNewDay() */
-        case SIGCONT:
-            break;
-
-        /* End of the simulation */
-        case SIGSYS:
+        case SIGSYS: /* End simulation */
             dumpData();
             simulationRunning = 0;
             stopWaitingQueues = 1;
@@ -401,7 +392,7 @@ int work() {
     int *queues[2];
 
     /* wait for simulation to start */
-    if (waitForStart() != 0) {
+    if (waitForSignal(SIGUSR1) != 0) {
         handleError("Error while waiting for start");
         return -1;
     }
@@ -541,17 +532,6 @@ int work() {
     return 0;
 }
 
-int waitForStart() {
-
-    int sig, waitRes;
-    sigset_t sigset;
-
-    sigaddset(&sigset, SIGUSR1);
-    waitRes = sigwait(&sigset, &sig);
-
-    return waitRes;
-}
-
 int freePendingMsgs() {
 
     /* Check for pending requests */
@@ -644,28 +624,6 @@ int dumpData() {
     acknowledgeDumpArr[port.id] = 1;
 
     return 0;
-}
-
-int waitForDumpData() {
-
-    int sig, waitRes;
-    sigset_t sigset;
-
-    sigaddset(&sigset, SIGIO);
-    waitRes = sigwait(&sigset, &sig);
-
-    return waitRes;
-}
-
-int waitForNewDay() {
-
-    int sig, waitRes;
-    sigset_t sigset;
-
-    sigaddset(&sigset, SIGCONT);
-    waitRes = sigwait(&sigset, &sig);
-    
-    return waitRes;
 }
 
 int newDay() {
