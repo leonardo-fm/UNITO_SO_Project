@@ -43,7 +43,7 @@ int writingMsgQueue = -1;
 /* No value equal to -1, o to n is the good id is selling */
 int currentSellingGood = -1;
 
-Boat boat;
+Boat *boat;
 Goods *goodHold;
 
 int simulationRunning = 1;
@@ -264,16 +264,16 @@ int initializeBoat(char *boatIdS, char *portSharedMemoryIdS, char *boatSharedMem
         return -1;
     }
 
-    boat.id = strtol(boatIdS, &p, 10);
-    boat.pid = getpid();
-    boat.position = getRandomCoordinates(configArr[SO_LATO], configArr[SO_LATO]);
-    boat.capacityInTon = configArr[S0_CAPACITY];
-    boat.speed = configArr[SO_SPEED];
-    boat.state = In_Sea_Empty;
+    referenceId = strtol(boatIdS, &p, 10) - configArr[SO_PORTI];
 
-    /* Added boat to the array of boats */
-    referenceId = boat.id - configArr[SO_PORTI];
-    boatArr[referenceId] = boat;
+    boatArr[referenceId].id = strtol(boatIdS, &p, 10);
+    boatArr[referenceId].pid = getpid();
+    boatArr[referenceId].position = getRandomCoordinates(configArr[SO_LATO], configArr[SO_LATO]);
+    boatArr[referenceId].capacityInTon = configArr[S0_CAPACITY];
+    boatArr[referenceId].speed = configArr[SO_SPEED];
+    boatArr[referenceId].state = In_Sea_Empty;
+
+    boat = &boatArr[referenceId];
 
     /* Initialization of the hold */
     goodHold = malloc(sizeof(Goods) * configArr[SO_MERCI]);
@@ -303,7 +303,7 @@ int handleStorm() {
     double waitTimeNs = getNanoSeconds(stormTime);
     double waitTimeS = getSeconds(stormTime);
 
-    boat.storm++;
+    boat->storm++;
     if (safeWait(waitTimeS, waitTimeNs) == -1) {
         handleError("Error while waiting the storm");
         return -1;
@@ -321,9 +321,9 @@ void handleMalestorm() {
 
     dumpData();
 
-    boat.state = Sunk;
-    acknowledgeInitArr[boat.id] = -1;
-    acknowledgeDumpArr[boat.id] = -1;
+    setStatus(Sunk);
+    acknowledgeInitArr[boat->id] = -1;
+    acknowledgeDumpArr[boat->id] = -1;
 }
 
 int work() {
@@ -358,9 +358,9 @@ int work() {
             } 
 
             if (haveIGoodsToSell() == 0) {
-                boat.state = In_Sea;
+                setStatus(In_Sea);
             } else {
-                boat.state = In_Sea_Empty;
+                setStatus(In_Sea_Empty);
             }
         }
     }
@@ -376,7 +376,7 @@ int dumpData() {
     boatDailyDump bdd;
 
     /* Send goods data */
-    goodReferenceId = boat.id * configArr[SO_MERCI];
+    goodReferenceId = boat->id * configArr[SO_MERCI];
     for (i = 0; i < configArr[SO_MERCI]; i++) {
 
         gdd.goodId = i;
@@ -398,16 +398,16 @@ int dumpData() {
     }
 
     /* Send boat data */
-    boatReferenceId = boat.id - configArr[SO_PORTI];
+    boatReferenceId = boat->id - configArr[SO_PORTI];
 
-    bdd.id = boat.id;
-    bdd.storm = boat.storm;
-    bdd.malestorm = boat.state == Sunk ? 1 : 0;
-    bdd.boatState = boat.state;
+    bdd.id = boat->id;
+    bdd.storm = boat->storm;
+    bdd.malestorm = boat->state == Sunk ? 1 : 0;
+    bdd.boatState = boat->state;
     memcpy(&boatDumpArr[boatReferenceId], &bdd, sizeof(boatDailyDump)); 
 
     /* Acknowledge finish dump data */
-    acknowledgeDumpArr[boat.id] = 1;
+    acknowledgeDumpArr[boat->id] = 1;
 
     return 0;
 }
@@ -450,22 +450,22 @@ int gotoPort() {
         }
     }
 
-    distance = sqrt(pow(portArr[currentPort].position.x - boat.position.x, 2) 
-                    + pow(portArr[currentPort].position.y - boat.position.y, 2));
+    distance = sqrt(pow(portArr[currentPort].position.x - boat->position.x, 2) 
+                    + pow(portArr[currentPort].position.y - boat->position.y, 2));
 
     kmPerDay = distance / configArr[SO_SPEED];
     waitTimeNs = getNanoSeconds(kmPerDay);
     waitTimeS = getSeconds(kmPerDay);
 
     /* Set the status to travellig */
-    boat.state = boat.state == In_Sea ? In_Sea_Travelling : In_Sea_Empty_Travelling;
+    setStatus(boat->state == In_Sea ? In_Sea_Travelling : In_Sea_Empty_Travelling);
 
     if (safeWait(waitTimeS, waitTimeNs) == -1) {
         handleError("Error while waiting to go to in a port");
         return -1;
     }
 
-    boat.state = boat.state == In_Sea_Travelling ? In_Sea : In_Sea_Empty;
+    setStatus(boat->state == In_Sea_Travelling ? In_Sea : In_Sea_Empty);
 
     return 0;
 }
@@ -532,7 +532,7 @@ int openTrade() {
         return 1;
     }
     
-    boat.state = In_Port_Exchange;
+    setStatus(In_Port_Exchange);
     
     if (trade() == -1) {
         handleError("Error during trade");
@@ -640,7 +640,7 @@ int haveIGoodsToBuy() {
         totalNumOfTons += goodHold[i].loadInTon;   
     }
 
-    if (totalNumOfTons < boat.capacityInTon) {
+    if (totalNumOfTons < boat->capacityInTon) {
         return 0;
     } else {
         return -1;
@@ -708,7 +708,7 @@ int sellGoods() {
 
     /* Sell all available goods */
     for (i = 0; i < configArr[SO_MERCI]; i++) {
-        if (goodHold[i].loadInTon > 0 && goodHold[i].state != Expired_In_The_Boat && boat.state == In_Port_Exchange) {
+        if (goodHold[i].loadInTon > 0 && goodHold[i].state != Expired_In_The_Boat && boat->state == In_Port_Exchange) {
 
             int exchange = 0;
             double loadTonPerDay;
@@ -838,7 +838,7 @@ int buyGoods() {
     /* Buy some available goods */
     availableSpace = floor((double) getSpaceAvailableInTheHold() / configArr[SO_MERCI]);
     for (i = 0; i < configArr[SO_MERCI]; i++) {
-        if (goodArr[i].loadInTon > 0 && goodArr[i].state != Expired_In_The_Port && boat.state == In_Port_Exchange) {
+        if (goodArr[i].loadInTon > 0 && goodArr[i].state != Expired_In_The_Port && boat->state == In_Port_Exchange) {
             
             int exchange;
             double loadTonPerDay;
@@ -917,13 +917,20 @@ int getSpaceAvailableInTheHold() {
         totalNumOfTons += goodHold[i].loadInTon;   
     }
 
-    return boat.capacityInTon - totalNumOfTons;
+    return boat->capacityInTon - totalNumOfTons;
 }
 
 void setAcknowledge() {
 
-    if (boat.state != Sunk) {
-        acknowledgeInitArr[boat.id] = 1;
+    if (boat->state != Sunk) {
+        acknowledgeInitArr[boat->id] = 1;
+    }
+}
+
+void setStatus(BoatState newState) {
+
+    if (boat->state != Sunk) {
+        boat->state = newState;
     }
 }
 

@@ -299,6 +299,7 @@ int acknowledgeChildrenStatus(int checkAnalyzerSatus) {
         for (i = 0; i < entities; i++)
         {
             if (acknowledgeInitArr[i] == 0) {
+                printf("Master failed id %d\n", i);
                 debug("Failed init check");
                 allChildrenInit = 0;
                 break;
@@ -375,12 +376,6 @@ int work() {
             currentHour++;
 
         } while (currentHour != HOUR_IN_DAY);
-        
-        
-        if (safeWait(1, 0l) == -1) {
-            handleError("Error while waiting next day master");
-            return -1;
-        }
 
         if (simulationDays < configArr[SO_DAYS] && simulationFinishedEarly == 0) {
 

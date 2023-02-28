@@ -31,7 +31,8 @@ goodEndDump *endGoodDumpArr = 0;
 sem_t *endGoodDumpSemaphore = 0; 
 Goods *goodMasterArr = 0;
 
-Port port = {-1, 0, 0, 0, 0, 0, {0, 0}};
+Port *portArr = 0;
+Port *port = 0;
 
 int goodStockSharedMemoryId = 0;
 Goods *goodStockArr = 0;
@@ -67,6 +68,7 @@ void handle_port_simulation_signals(int signal) {
             break;
 
         case SIGPROF: /* Swell */
+            printf("SWELL for id %d\n", port->id);
             handleSwell();
             break;
 
@@ -256,7 +258,7 @@ int initializePort(char *portIdString, char *portSharedMemoryIdS) {
         handleError("Error occurred during init of goods");
         return -1;
     }
-    
+
     /* Aknowledge finish */
     setAcknowledge();
 
@@ -268,7 +270,6 @@ int initializePortStruct(char *portIdString, char *portSharedMemoryIdS) {
     char *p;
     char queueKey[12];
     int portId, portMsgId, sharedMemoryId;
-    Port *arrPort;
 
     portId = strtol(portIdString, &p, 10);
     
@@ -284,30 +285,25 @@ int initializePortStruct(char *portIdString, char *portSharedMemoryIdS) {
         return -1;
     }
 
-    port.id = portId;
-    port.pid = getpid();
-    port.msgQueuId = portMsgId;
-    if (port.id < 4) {
-        port.position = getCornerCoordinates(configArr[SO_LATO], configArr[SO_LATO], port.id);
-    } else {
-        port.position = getRandomCoordinates(configArr[SO_LATO], configArr[SO_LATO]);
-    }
-    port.quays = getRandomValue(1, configArr[SO_BANCHINE]);
-    port.availableQuays = port.quays;
-
     sharedMemoryId = strtol(portSharedMemoryIdS, &p, 10);
-    arrPort = (Port*) shmat(sharedMemoryId, NULL, 0);
-    if (arrPort == (void*) -1) {
+    portArr = (Port*) shmat(sharedMemoryId, NULL, 0);
+    if (portArr == (void*) -1) {
         handleErrno("shmat()");
         return -1;
     }
-
-    arrPort[port.id] = port;
-
-    if (shmdt(arrPort) == -1) {
-        handleErrno("shmdt()");
-        return -1;
+    
+    portArr[portId].id = portId;
+    portArr[portId].pid = getpid();
+    portArr[portId].msgQueuId = portMsgId;
+    if (portArr[portId].id < 4) {
+        portArr[portId].position = getCornerCoordinates(configArr[SO_LATO], configArr[SO_LATO], portArr[portId].id);
+    } else {
+        portArr[portId].position = getRandomCoordinates(configArr[SO_LATO], configArr[SO_LATO]);
     }
+    portArr[portId].quays = getRandomValue(1, configArr[SO_BANCHINE]);
+    portArr[portId].availableQuays = portArr[portId].quays;
+
+    port = &portArr[portId];
 
     return 0;
 }
@@ -414,7 +410,7 @@ int handleSwell() {
     double waitTimeNs = getNanoSeconds(swellTime);
     double waitTimeS = getSeconds(swellTime);
 
-    port.swell++;
+    port->swell++;
     if (safeWait(waitTimeS, waitTimeNs) == -1) {
         handleError("Error while waiting the swall");
         return -1;
@@ -435,7 +431,7 @@ int work() {
     }
 
     /* queue[0][n] read queue | queue[1][n] write queue */
-    maxQauys = port.availableQuays;
+    maxQauys = port->availableQuays;
     queues[0] = (int*) malloc(sizeof(int) * maxQauys);
     queues[1] = (int*) malloc(sizeof(int) * maxQauys);
     for (i = 0; i < 2; i++) {
@@ -445,12 +441,12 @@ int work() {
     }
 
     /* Remains alive until all the quays are empty to avoid boats closing errors */
-    while (simulationRunning == 1 || (port.quays - port.availableQuays) > 0)
+    while (simulationRunning == 1 || (port->quays - port->availableQuays) > 0)
     {
         if (simulationRunning == 1) {
             PortMessage setupMsg;
-            int flag = port.availableQuays == port.quays ? 0 : IPC_NOWAIT;
-            int setupMsgStatus = receiveMessage(port.msgQueuId, &setupMsg, flag, 1);
+            int flag = port->availableQuays == port->quays ? 0 : IPC_NOWAIT;
+            int setupMsgStatus = receiveMessage(port->msgQueuId, &setupMsg, flag, 1);
 
             if (setupMsgStatus == -1) {
                 handleError("Error during reciving message from boat");
@@ -575,7 +571,7 @@ int freePendingMsgs() {
     struct msqid_ds msgInfo;
     int msgInfoResponse, pendingMsg, i;
     
-    msgInfoResponse = msgctl(port.msgQueuId, IPC_STAT, &msgInfo);
+    msgInfoResponse = msgctl(port->msgQueuId, IPC_STAT, &msgInfo);
     if (msgInfoResponse == -1) {
         handleErrno("msgctl()");
         return -1;
@@ -584,7 +580,7 @@ int freePendingMsgs() {
     pendingMsg = (int) msgInfo.msg_qnum;  
     for (i = 0; i < pendingMsg; i++) {
         PortMessage pendingMsg;
-        int pendingMsgStatus = receiveMessage(port.msgQueuId, &pendingMsg, 0, 0);
+        int pendingMsgStatus = receiveMessage(port->msgQueuId, &pendingMsg, 0, 0);
 
         if (pendingMsgStatus == -1) {
             handleError("Error during reciving message from boat on pending messages");
@@ -624,7 +620,7 @@ int dumpData() {
     }
 
     /* Send goods data */
-    goodReferenceId = port.id * configArr[SO_MERCI];
+    goodReferenceId = port->id * configArr[SO_MERCI];
     for (i = 0; i < configArr[SO_MERCI]; i++) {
         
         gdd.goodId = i;
@@ -647,21 +643,21 @@ int dumpData() {
     }
 
     /* Send port data */
-    pdd.id = port.id;
+    pdd.id = port->id;
     pdd.totalGoodInStock = totalGoodInStock;
     pdd.totalGoodRequested = totalGoodRequested;
     pdd.totalGoodRecived = totalDailyGoodsRecived;
     pdd.totalGoodSold = totalDailyGoodsSold;
-    pdd.totalQuays = port.quays;
-    pdd.busyQuays = port.quays - port.availableQuays;
-    pdd.swell = port.swell;
+    pdd.totalQuays = port->quays;
+    pdd.busyQuays = port->quays - port->availableQuays;
+    pdd.swell = port->swell;
 
-    portDumpArr[port.id] = pdd;
+    portDumpArr[port->id] = pdd;
 
-    port.swell = 0;
+    port->swell = 0;
 
     /* Acknowledge end of data dump */
-    acknowledgeDumpArr[port.id] = 1;
+    acknowledgeDumpArr[port->id] = 1;
 
     return 0;
 }
@@ -702,7 +698,7 @@ int newDay() {
         }
     }
 
-    snprintf(buffer, sizeof(buffer), "Port %d, free quays %d/%d", port.id, port.availableQuays, port.quays);
+    snprintf(buffer, sizeof(buffer), "Port %d, free quays %d/%d", port->id, port->availableQuays, port->quays);
     debug(buffer);
 
     return 0;
@@ -711,13 +707,13 @@ int newDay() {
 /* If the port accept the boat request return 0, if not return 1, for errors return -1 */
 int handlePA_ACCEPT(int queueId) {
 
-    if (port.availableQuays > 0 && simulationRunning == 1) {
+    if (port->availableQuays > 0 && simulationRunning == 1) {
         if (sendMessage(queueId, PA_Y, -1, -1) == -1) {
             handleError("Error during send ACCEPT");
             return -1;
         }
 
-        port.availableQuays--;
+        port->availableQuays--;
 
     } else {
         if (sendMessage(queueId, PA_N, -1, -1) == -1) {
@@ -806,7 +802,7 @@ int handlePA_EOT(int writeQueueId) {
         return -1;
     }
 
-    port.availableQuays++;
+    port->availableQuays++;
 
     return 0;
 }
@@ -844,7 +840,7 @@ sem_t *generateSemaphore(int semKey) {
 
 void setAcknowledge() {
     
-    acknowledgeInitArr[port.id] = 1;
+    acknowledgeInitArr[port->id] = 1;
 }
  
 int cleanup() {
@@ -874,7 +870,7 @@ int cleanup() {
         return -1;
     }
 
-    if (port.msgQueuId != 0 && msgctl(port.msgQueuId, IPC_RMID, NULL) == -1) {
+    if (port->msgQueuId != 0 && msgctl(port->msgQueuId, IPC_RMID, NULL) == -1) {
         handleErrno("msgctl()");
         return -1;
     }
@@ -920,6 +916,11 @@ int cleanup() {
     }
 
     if (goodMasterArr != 0 && shmdt(goodMasterArr) == -1) {
+        handleErrno("shmdt()");
+        return -1;
+    }
+
+    if (portArr != 0 && shmdt(portArr) == -1) {
         handleErrno("shmdt()");
         return -1;
     }

@@ -171,8 +171,6 @@ int work() {
             return -1;
         }
 
-        passedHours++;
-
         /* Activate storm and swell */
         if (passedHours % HOUR_IN_DAY == 0) {
             
@@ -194,13 +192,15 @@ int work() {
                 return -1;
             }
         }
+
+        passedHours++;
     }
 
     return 0;
 }
 
 int activateSwell() {
-
+    
     int randomPortId = getRandomValue(0, configArr[SO_PORTI] - 1);
     if (kill(portArr[randomPortId].pid, SIGPROF) == -1) {
         handleErrno("kill()");
@@ -244,7 +244,7 @@ int activateMalestorm() {
     {
         int currentId = (randomStartId + i) % configArr[SO_NAVI];
         if (boatArr[currentId].state != Sunk) {
-            randomBoatId = i;
+            randomBoatId = currentId;
             break;
         }
     }

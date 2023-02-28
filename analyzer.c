@@ -365,6 +365,7 @@ int checkDataDump() {
         waitTimeInSeconds += waitTimeInSeconds;
 
         if (waitTimeInSeconds > 1) {
+            printf("Analyzer failed id %d\n", i);
             handleError("Wait time for dump data exeaded 1 second");
             return -1;
         }
@@ -492,6 +493,7 @@ int generateDailyBoatReport() {
     memset(boatDumpArr, 0, configArr[SO_NAVI]);
 
     totalBoatSunk += boatSunk;
+
     if (totalBoatSunk == configArr[SO_NAVI]) {
         sendMessage(writingMsgQueue, PA_EOS_ABS, -1, -1);
         simulationFinishedEarly = 1;

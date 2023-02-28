@@ -20,5 +20,6 @@ int sellGoods();
 int buyGoods();
 int getSpaceAvailableInTheHold();
 void setAcknowledge();
+void setStatus(BoatState newState);
 int cleanup();
 void safeExit(int exitNumber);
