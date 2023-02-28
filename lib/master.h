@@ -5,7 +5,6 @@ int work();
 int generateSharedMemory(int sizeOfSegment);
 sem_t *generateSemaphore(int semKey);
 int generateSubProcesses(int nOfProcess, char *execFilePath, int includeProceduralId, int *arguments, int argSize);
-int initializeGoods(int goodShareMemoryId);
-int generateGoods(int goodShareMemoryId);
+int generateGoods(int firstGenerations);
 int cleanup();
 void safeExit(int exitNumber);

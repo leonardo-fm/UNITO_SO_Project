@@ -1,11 +1,11 @@
 int initializeSingalsHandlers();
 int initializeConfig(char *configShareMemoryIdString, char *goodAnalyzerShareMemoryIdString, 
     char *portAnalyzerShareMemoryIdString, char *acknowledgeInitShareMemoryIdS, char *endGoodShareMemoryIdS,
-    char *acknowledgeDumpShareMemoryIdS);
-int initializePort(char *portIdString, char *portShareMemoryIdS, char *goodShareMemoryIdS);
+    char *acknowledgeDumpShareMemoryIdS, char *goodMasterShareMemoryIdS);
+int initializePort(char *portIdString, char *portShareMemoryIdS);
 int initializePortStruct(char *portIdString, char *portShareMemoryIdS);
 int initializeExchangeGoods();
-int initializePortGoods(char *goodShareMemoryIdS);
+int initializePortGoods();
 int work();
 int dumpData();
 int newDay();

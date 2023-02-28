@@ -147,7 +147,7 @@ int main() {
         safeExit(8);
     }
 
-    if (initializeGoods(goodSharedMemoryId) == -1) {
+    if (generateGoods(1) == -1) {
         safeExit(9);
     }
 
@@ -369,6 +369,12 @@ int work() {
             /* Wait fo the boats and ports to dump data [analyzer] */
             waitForAnalizerToCollectData();
 
+            /* Generate new goods */
+            if (generateGoods(0) == -1) {
+                handleError("Error while generating goods");
+                return -1;
+            }
+
             /* Coontiue the simulation */
             killpg(getpid(), SIGCONT);
             debug("Sended SIGCONT");
@@ -513,22 +519,11 @@ int generateSubProcesses(int nOfProcess, char *execFilePath, int includeProcedur
     return 0;
 }
 
-int initializeGoods(int goodSharedMemoryId) {
-
-    /* Init of goods */
-    if (generateGoods(goodSharedMemoryId) == -1) {
-        handleError("Error while generating goods");
-        return -1;
-    }
-
-    return 0;
-}
-
 /* Generate all the goods requested and initialize them */
-int generateGoods(int goodSharedMemoryId) {
+int generateGoods(int firstGenerations) {
 
     int *randomGoodDistribution;
-    int i;
+    int i, goodPerDay;
 
     Goods *arr = (Goods*) shmat(goodSharedMemoryId, NULL, 0);
     if (arr == (void*) -1) {
@@ -537,15 +532,33 @@ int generateGoods(int goodSharedMemoryId) {
     }
 
     randomGoodDistribution = (int *) malloc(sizeof(int) * configArr[SO_MERCI]);
-    generateSubgroupSums(randomGoodDistribution, configArr[SO_FILL], configArr[SO_MERCI]);
+    goodPerDay = configArr[SO_FILL] / configArr[SO_DAYS];
+    generateSubgroupSums(randomGoodDistribution, goodPerDay, configArr[SO_MERCI]);
 
     for (i = 0; i < configArr[SO_MERCI]; i++) {
+        
         Goods good;
-        good.id = i;
-        /* I got the amount of each port must have */
-        good.loadInTon = randomGoodDistribution[i] / configArr[SO_PORTI];
-        good.state = Undefined;
-        good.remaningDays = getRandomValue(configArr[SO_MIN_VITA], configArr[SO_MAX_VITA]);
+        
+        if (firstGenerations) {
+
+            good.id = i;
+            /* I got the amount of each port must have */
+            good.loadInTon = randomGoodDistribution[i] / configArr[SO_PORTI];
+            good.state = Undefined;
+            good.remaningDays = getRandomValue(configArr[SO_MIN_VITA], configArr[SO_MAX_VITA]);
+        } else {
+
+            good = arr[i];
+            
+            if (good.remaningDays > 0) {
+            
+                good.loadInTon = randomGoodDistribution[i] / configArr[SO_PORTI];
+                good.remaningDays--;
+            } else {
+            
+                good.loadInTon = 0;
+            }
+        }
 
         arr[i] = good;
     }
