@@ -12,7 +12,7 @@ run: build
 	clear 
 	./bin/master
 
-build: master nave porto analyzer
+build: master nave porto analyzer meteo
 
 master: master.c
 	gcc $(CFLAGS) $(SFLAGS) -o bin/master master.c $(LFLAGS) -pthread
@@ -26,6 +26,9 @@ porto: porto.c
 analyzer: analyzer.c
 	gcc $(CFLAGS) $(SFLAGS) -o bin/analyzer analyzer.c $(LFLAGS) -pthread
 
+meteo: meteo.c
+	gcc $(CFLAGS) $(SFLAGS) -o bin/meteo meteo.c $(LFLAGS) -pthread
+
 # DEBUG Section
 
 debug: build-debug
@@ -36,7 +39,7 @@ debug-l: build-debug
 	clear 
 	./bin/master > $(LOG_FILE)
 
-build-debug: master_d nave_d porto_d analyzer_d
+build-debug: master_d nave_d porto_d analyzer_d meteo_d
 
 master_d: master.c
 	gcc $(CFLAGS) $(CDFLAGS) $(SFLAGS) -o bin/master master.c $(LFLAGS) -pthread
@@ -49,6 +52,9 @@ porto_d: porto.c
 
 analyzer_d: analyzer.c
 	gcc $(CFLAGS) $(CDFLAGS) $(SFLAGS) -o bin/analyzer analyzer.c $(LFLAGS) -pthread
+
+meteo_d: meteo.c
+	gcc $(CFLAGS) $(CDFLAGS) $(SFLAGS) -o bin/meteo meteo.c $(LFLAGS) -pthread
 
 # ADDITIONAL stuff
 

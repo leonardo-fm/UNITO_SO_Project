@@ -29,7 +29,7 @@ portDailyDump *portDumpArr = 0;
 
 int *acknowledgeInitArr = 0;
 
-int acknowledgeDumpShareMemoryId = 0;
+int acknowledgeDumpSharedMemoryId = 0;
 int *acknowledgeDumpArr = 0;
 
 int endGoodSharedMemoryId = 0; 
@@ -48,6 +48,7 @@ int currentDay = 0;
 int simulationRunning = 1;
 int simulationFinishedEarly = 0;
 int masterPid = 0;
+int totalBoatSunk = 0;
 
 void handle_analyzer_simulation_signals(int signal) {
 
@@ -75,11 +76,12 @@ void handle_analyzer_stopProcess() {
     exit(0);
 }
 
-/* argv[0]=id | argv[1]=ganalizersh | argv[2]=banalyzersh | argv[3]=panalyzersh | 
-    argv[4]=wmsgq | argv[5]=rmsgq | argv[6]=endanalyzershm, argv[7]=akish | argv[7]=akdsh */
+/* argv[0]=confId | argv[1]=ganalizersh | argv[2]=banalyzersh | argv[3]=panalyzersh | 
+    argv[4]=wmsgq | argv[5]=rmsgq | argv[6]=endanalyzershm, argv[7]=akish | argv[8]=akdsh */
 int main(int argx, char *argv[]) {
 
     (void) argx;
+    initializeSingalsMask();
     initializeSingalsHandlers();
 
     if (initializeConfig(argv[0]) == -1) {
@@ -98,7 +100,7 @@ int main(int argx, char *argv[]) {
     }
 
     /* Acknowledge finish */
-    acknowledgeInitArr[configArr[SO_PORTI] + configArr[SO_NAVI]] = 1;
+    setAcknowledge();
 
     if (cleanup() == -1) {
         handleError("Analyzer cleanup failed");
@@ -108,30 +110,33 @@ int main(int argx, char *argv[]) {
     return 0;
 }
 
-int initializeSingalsHandlers() {
+void initializeSingalsMask() {
 
     sigset_t sigMask;
-
-    setpgid(getpid(), getppid());
-    masterPid = getppid();
 
     /* Mask all signals except SIGINT and SIGSYS */
     sigfillset(&sigMask);
     sigdelset(&sigMask, SIGINT);
     sigdelset(&sigMask, SIGSYS);
     sigprocmask(SIG_SETMASK, &sigMask, NULL);
+}
+
+int initializeSingalsHandlers() {
+
+    setpgid(getpid(), getppid());
+    masterPid = getppid();
 
     signal(SIGSYS, handle_analyzer_simulation_signals);
 
     return 0;
 }
 
-int initializeConfig(char *configShareMemoryIdString) {
+int initializeConfig(char *configSharedMemoryIdString) {
 
     char *p;
-    int configShareMemoryId = strtol(configShareMemoryIdString, &p, 10);
+    int configSharedMemoryId = strtol(configSharedMemoryIdString, &p, 10);
     
-    configArr = (int*) shmat(configShareMemoryId, NULL, 0);
+    configArr = (int*) shmat(configSharedMemoryId, NULL, 0);
     if (configArr == (void*) -1) {
         handleError("The config key as failed to be conveted in analyzer");
         return -1;
@@ -140,50 +145,50 @@ int initializeConfig(char *configShareMemoryIdString) {
     return 0;
 }
 
-int initializeAnalyzer(char *goodAnalyzerShareMemoryIdString, char *boatAnalyzerShareMemoryIdString, 
-    char *portAnalyzerShareMemoryIdString, char *wmsgq, char *rmsgq, char *endGoodShareMemoryIdString,
-    char *acknowledgeInitShareMemoryIdString, char *acknowledgeDumpShareMemoryIdString) {
+int initializeAnalyzer(char *goodAnalyzerSharedMemoryIdString, char *boatAnalyzerSharedMemoryIdString, 
+    char *portAnalyzerSharedMemoryIdString, char *wmsgq, char *rmsgq, char *endGoodSharedMemoryIdString,
+    char *acknowledgeInitSharedMemoryIdString, char *acknowledgeDumpSharedMemoryIdString) {
 
     char *p;
     int size = sizeof(int) * configArr[SO_PORTI] * 2;
-    int acknowledgeInitShareMemoryId = strtol(acknowledgeInitShareMemoryIdString, &p, 10);
+    int acknowledgeInitSharedMemoryId = strtol(acknowledgeInitSharedMemoryIdString, &p, 10);
 
-    goodAnalyzerSharedMemoryId = strtol(goodAnalyzerShareMemoryIdString, &p, 10);
+    goodAnalyzerSharedMemoryId = strtol(goodAnalyzerSharedMemoryIdString, &p, 10);
     goodDumpArr = (goodDailyDump*) shmat(goodAnalyzerSharedMemoryId, NULL, 0);
     if (goodDumpArr == (void*) -1) {
         handleErrno("shmat()");
         return -1;
     }
 
-    boatAnalyzerSharedMemoryId = strtol(boatAnalyzerShareMemoryIdString, &p, 10);
+    boatAnalyzerSharedMemoryId = strtol(boatAnalyzerSharedMemoryIdString, &p, 10);
     boatDumpArr = (boatDailyDump*) shmat(boatAnalyzerSharedMemoryId, NULL, 0);
     if (goodDumpArr == (void*) -1) {
         handleErrno("shmat()");
         return -1;
     }
 
-    portAnalyzerSharedMemoryId = strtol(portAnalyzerShareMemoryIdString, &p, 10);
+    portAnalyzerSharedMemoryId = strtol(portAnalyzerSharedMemoryIdString, &p, 10);
     portDumpArr = (portDailyDump*) shmat(portAnalyzerSharedMemoryId, NULL, 0);
     if (goodDumpArr == (void*) -1) {
         handleErrno("shmat()");
         return -1;
     }
 
-    endGoodSharedMemoryId = strtol(endGoodShareMemoryIdString, &p, 10);
+    endGoodSharedMemoryId = strtol(endGoodSharedMemoryIdString, &p, 10);
     endGoodArr = (goodEndDump*) shmat(endGoodSharedMemoryId, NULL, 0);
     if (goodDumpArr == (void*) -1) {
         handleErrno("shmat()");
         return -1;
     }
 
-    acknowledgeInitArr = (int*) shmat(acknowledgeInitShareMemoryId, NULL, 0);
+    acknowledgeInitArr = (int*) shmat(acknowledgeInitSharedMemoryId, NULL, 0);
     if (acknowledgeInitArr == (void*) -1) {
         handleErrno("shmat()");
         return -1;
     }
 
-    acknowledgeDumpShareMemoryId = strtol(acknowledgeDumpShareMemoryIdString, &p, 10);
-    acknowledgeDumpArr = (int*) shmat(acknowledgeDumpShareMemoryId, NULL, 0);
+    acknowledgeDumpSharedMemoryId = strtol(acknowledgeDumpSharedMemoryIdString, &p, 10);
+    acknowledgeDumpArr = (int*) shmat(acknowledgeDumpSharedMemoryId, NULL, 0);
     if (goodDumpArr == (void*) -1) {
         handleErrno("shmat()");
         return -1;
@@ -198,8 +203,8 @@ int initializeAnalyzer(char *goodAnalyzerShareMemoryIdString, char *boatAnalyzer
     createLogFile();
 
     /* Acknowledge finish init */
-    acknowledgeInitArr[configArr[SO_PORTI] + configArr[SO_NAVI]] = 1;
-
+    setAcknowledge();
+    
     return 0;
 }
 
@@ -372,7 +377,12 @@ int checkDataDump() {
     }
 
     /* Reset acknowledge */
-    memset(acknowledgeDumpArr, 0, entities);
+    for (i = 0; i < entities; i++)
+    {
+        if (acknowledgeDumpArr[i] != -1) {
+            acknowledgeDumpArr[i] = 0;
+        }
+    }
 
     return 0;
 }
@@ -458,22 +468,35 @@ int generateDailyGoodReport() {
 
 int generateDailyBoatReport() {
     
-    /* In_Sea = 0, In_Sea_Empty = 1, In_Port_Exchange = 2 */
-    int boatStatus[3] = {0};
+    /* In_Sea = 0, In_Sea_Empty = 1, In_Port_Exchange = 2, In_Sea_Travelling = 3, In_Sea_Empty_Travelling = 4 */
+    int boatStatus[5] = {0};
+    int boatHitByStorm = 0;
+    int boatSunk = 0;
     int i;
 
     /* Aggregate data */
     for (i = 0; i < configArr[SO_NAVI]; i++) {
         boatStatus[boatDumpArr[i].boatState]++;
+        boatHitByStorm += boatDumpArr[i].storm;
+        boatSunk += boatDumpArr[i].malestorm;
     }
 
     /* Print data */
-    fprintf(filePointer, "%-12s%-12s%-12s\n", "BOAT_SEA", "BOAT_SEA_E", "BOAT_EXCH");
-    fprintf(filePointer, "%-12d%-12d%-12d\n", boatStatus[0], boatStatus[1], boatStatus[2]);
+    /* In_Sea/Travelling = 0/3 | In_Sea_Empty/Travelling = 1/4 | In_Port_Exchange = 2 */
+    fprintf(filePointer, "%-12s%-12s%-12s%-12s%-12s\n", "BOAT_SEA", "BOAT_SEA_E", "BOAT_EXCH", "STORM", "MALESTORM");
+    fprintf(filePointer, "%-12d%-12d%-12d%-12d%-12d\n", 
+        boatStatus[0] + boatStatus[3], boatStatus[1], boatStatus[2] + boatStatus[4], boatHitByStorm, boatSunk);
     fprintf(filePointer, "\n");
 
     /* Cleaning of the memory after analyzing data */
     memset(boatDumpArr, 0, configArr[SO_NAVI]);
+
+    totalBoatSunk += boatSunk;
+    if (totalBoatSunk == configArr[SO_NAVI]) {
+        sendMessage(writingMsgQueue, PA_EOS_ABS, -1, -1);
+        simulationFinishedEarly = 1;
+        debug("Analyzer sent PA_EOS_ABS to master");
+    }
 
     return 0;
 }
@@ -483,14 +506,14 @@ int generateDailyPortReport() {
     int i, inStock, requested;
 
     /* Print data */
-    fprintf(filePointer, "%-12s%-12s%-12s%-12s%-12s%-12s\n", "PORT_ID", "G00D_STOCK", "GOOD_REQ", "GOOD_SOLD", "GOOD_RECIV", "BUSY_QUAYS");
+    fprintf(filePointer, "%-12s%-12s%-12s%-12s%-12s%-12s%-12s\n", "PORT_ID", "G00D_STOCK", "GOOD_REQ", "GOOD_SOLD", "GOOD_RECIV", "BUSY_QUAYS", "SWELL");
     for (i = 0; i < configArr[SO_PORTI]; i++) {
         char buffer[16];
         int currentId;
 
         snprintf(buffer, sizeof(buffer), "%d/%d", portDumpArr[i].busyQuays, portDumpArr[i].totalQuays);
-        fprintf(filePointer, "%-12d%-12d%-12d%-12d%-12d%-12s\n", portDumpArr[i].id, portDumpArr[i].totalGoodInStock, 
-            portDumpArr[i].totalGoodRequested, portDumpArr[i].totalGoodSold, portDumpArr[i].totalGoodRecived, buffer);
+        fprintf(filePointer, "%-12d%-12d%-12d%-12d%-12d%-12s%-12d\n", portDumpArr[i].id, portDumpArr[i].totalGoodInStock, 
+            portDumpArr[i].totalGoodRequested, portDumpArr[i].totalGoodSold, portDumpArr[i].totalGoodRecived, buffer, portDumpArr[i].swell);
 
         /* Collect data for the best port at the end dump */
         currentId = 2 * i;
@@ -600,6 +623,11 @@ int generateEndPortStat() {
     return 0;
 }
 
+void setAcknowledge() {
+
+    acknowledgeInitArr[configArr[SO_PORTI] + configArr[SO_NAVI]] = 1;
+}
+
 int cleanup() { 
 
     free(logPath);
@@ -640,6 +668,11 @@ int cleanup() {
         return -1;
     }
 
+    if (portAnalyzerSharedMemoryId != 0 && shmctl(portAnalyzerSharedMemoryId, IPC_RMID, NULL) == -1) {
+        handleErrno("shmctl()");
+        return -1;
+    }
+
     if (endGoodArr != 0 && shmdt(endGoodArr) == -1) {
         handleErrno("shmdt()");
         return -1;
@@ -670,7 +703,7 @@ int cleanup() {
         return -1;
     }
 
-    if (acknowledgeDumpShareMemoryId != 0 && shmctl(acknowledgeDumpShareMemoryId, IPC_RMID, NULL) == -1) {
+    if (acknowledgeDumpSharedMemoryId != 0 && shmctl(acknowledgeDumpSharedMemoryId, IPC_RMID, NULL) == -1) {
         handleErrno("shmctl()");
         return -1;
     }

@@ -20,7 +20,10 @@ typedef enum {
     SO_BANCHINE,
     SO_FILL,
     SO_LOADSPEED,
-    SO_DAYS 
+    SO_DAYS,
+    SO_STORM_DURATION,
+    SO_SWELL_DURATION,
+    SO_MALESTORM
 } ConfigurationVariables;
 
 
@@ -49,13 +52,18 @@ typedef struct {
 typedef enum { 
     In_Sea,
     In_Sea_Empty,
-    In_Port_Exchange
+    In_Port_Exchange,
+    In_Sea_Travelling,
+    In_Sea_Empty_Travelling,
+    Sunk
 } BoatState;
 
 typedef struct {
     int id;
+    int pid;
     int speed;
     int capacityInTon;
+    int storm;
     Coordinates position;
     BoatState state;
 } Boat;
@@ -65,9 +73,11 @@ typedef struct {
 
 typedef struct {
     int id;
+    int pid;
     int msgQueuId;
     int quays;
     int availableQuays;
+    int swell;
     Coordinates position;
 } Port;
 
@@ -85,6 +95,8 @@ typedef struct {
 
 typedef struct {
     int id;
+    int storm;
+    int malestorm;
     BoatState boatState;
 } boatDailyDump;
 
@@ -96,6 +108,7 @@ typedef struct {
     int totalGoodRecived;
     int busyQuays;
     int totalQuays;
+    int swell;
 } portDailyDump;
 
 typedef struct {

@@ -12,7 +12,7 @@
 
 /* Load the configuration file (config.txt) from the root directory of the project. */
 /* Return 0 if the configuration has been loaded succesfully, -1 if some errors occurred. */
-int loadConfig(int configShareMemoryId) {
+int loadConfig(int configSharedMemoryId) {
     
     int *arrConfig;
     char fileLine[150];
@@ -25,7 +25,7 @@ int loadConfig(int configShareMemoryId) {
         return -1;
     }
 
-    arrConfig = (int*) shmat(configShareMemoryId, NULL, 0);
+    arrConfig = (int*) shmat(configSharedMemoryId, NULL, 0);
     if (arrConfig == (void*) -1) {
         return -1;
     }

@@ -19,6 +19,8 @@
 
 #include "lib/porto.h"
 
+const int HOUR_IN_DAY = 24;
+
 int *configArr = 0;
 
 goodDailyDump *goodDumpArr = 0; 
@@ -29,13 +31,13 @@ goodEndDump *endGoodDumpArr = 0;
 sem_t *endGoodDumpSemaphore = 0; 
 Goods *goodMasterArr = 0;
 
-Port port = {-1, 0, 0, 0, {0, 0}};
+Port port = {-1, 0, 0, 0, 0, 0, {0, 0}};
 
-int goodStockShareMemoryId = 0;
+int goodStockSharedMemoryId = 0;
 Goods *goodStockArr = 0;
 sem_t *goodStockSemaphore = 0;
 
-int goodRequestShareMemoryId = 0;
+int goodRequestSharedMemoryId = 0;
 Goods *goodRequestArr = 0;
 sem_t *goodRequestSemaphore = 0;
 
@@ -52,13 +54,20 @@ void handle_port_simulation_signals(int signal) {
             break;
 
         case SIGUSR2: /* Stop simulation */
-            acknowledgeInitArr[port.id] = 1;
+            setAcknowledge();
+
             waitForSignal(SIGIO);
-            acknowledgeInitArr[port.id] = 1;
+            setAcknowledge();
             dumpData();
+            
             waitForSignal(SIGCONT);
-            acknowledgeInitArr[port.id] = 1;
+            setAcknowledge();
+
             newDay();
+            break;
+
+        case SIGPROF: /* Swell */
+            handleSwell();
             break;
 
         case SIGSYS: /* End simulation */
@@ -91,6 +100,7 @@ int main(int argx, char *argv[]) {
 
     (void) argx;
     initializeEnvironment();
+    initializeSingalsMask();
     initializeSingalsHandlers();
 
     if (initializeConfig(argv[1], argv[4], argv[5], argv[6], argv[7], argv[8], argv[3]) == -1) {
@@ -109,14 +119,29 @@ int main(int argx, char *argv[]) {
     }
 
     /* Aknowledge finish */
-    acknowledgeInitArr[port.id] = 1;
-
+    setAcknowledge();
+    
     if (cleanup() == -1) {
         handleError("Port cleanup failed");
         safeExit(4);
     }
 
     return 0;
+}
+
+void initializeSingalsMask() {
+
+    sigset_t sigMask;
+
+    sigfillset(&sigMask);
+    sigdelset(&sigMask, SIGUSR1);
+    sigdelset(&sigMask, SIGUSR2);
+    sigdelset(&sigMask, SIGIO);
+    sigdelset(&sigMask, SIGCONT);
+    sigdelset(&sigMask, SIGPROF);
+    sigdelset(&sigMask, SIGSYS);
+    sigdelset(&sigMask, SIGINT);
+    sigprocmask(SIG_SETMASK, &sigMask, NULL);
 }
 
 int initializeSingalsHandlers() {
@@ -141,26 +166,30 @@ int initializeSingalsHandlers() {
     signalAction.sa_handler = &handle_port_simulation_signals;
     sigaction(SIGCONT, &signalAction, NULL);
 
+    signalAction.sa_flags = SA_RESTART;
+    signalAction.sa_handler = &handle_port_simulation_signals;
+    sigaction(SIGPROF, &signalAction, NULL);
+
     signal(SIGSYS, handle_port_simulation_signals);
     signal(SIGINT, handle_port_stopProcess);
 
     return 0;
 }
 
-int initializeConfig(char *configShareMemoryIdString, char *goodAnalyzerShareMemoryIdString, 
-    char *portAnalyzerShareMemoryIdString, char *acknowledgeInitShareMemoryIdS, char *endGoodShareMemoryIdS,
-    char *acknowledgeDumpShareMemoryIdS, char *goodMasterShareMemoryIdS) {
+int initializeConfig(char *configSharedMemoryIdString, char *goodAnalyzerSharedMemoryIdString, 
+    char *portAnalyzerSharedMemoryIdString, char *acknowledgeInitSharedMemoryIdS, char *endGoodSharedMemoryIdS,
+    char *acknowledgeDumpSharedMemoryIdS, char *goodMasterSharedMemoryIdS) {
 
     char *p;
-    int configShareMemoryId = strtol(configShareMemoryIdString, &p, 10);
-    int goodAnalyzerSharedMemoryId = strtol(goodAnalyzerShareMemoryIdString, &p, 10);
-    int portAnalyzerSharedMemoryId = strtol(portAnalyzerShareMemoryIdString, &p, 10);
-    int acknowledgeInitShareMemoryId = strtol(acknowledgeInitShareMemoryIdS, &p, 10);
-    int endGoodShareMemoryId = strtol(endGoodShareMemoryIdS, &p, 10);
-    int acknowledgeDumpShareMemoryId = strtol(acknowledgeDumpShareMemoryIdS, &p, 10);
-    int goodMasterShareMemoryId = strtol(goodMasterShareMemoryIdS, &p, 10);
+    int configSharedMemoryId = strtol(configSharedMemoryIdString, &p, 10);
+    int goodAnalyzerSharedMemoryId = strtol(goodAnalyzerSharedMemoryIdString, &p, 10);
+    int portAnalyzerSharedMemoryId = strtol(portAnalyzerSharedMemoryIdString, &p, 10);
+    int acknowledgeInitSharedMemoryId = strtol(acknowledgeInitSharedMemoryIdS, &p, 10);
+    int endGoodSharedMemoryId = strtol(endGoodSharedMemoryIdS, &p, 10);
+    int acknowledgeDumpSharedMemoryId = strtol(acknowledgeDumpSharedMemoryIdS, &p, 10);
+    int goodMasterSharedMemoryId = strtol(goodMasterSharedMemoryIdS, &p, 10);
     
-    configArr = (int*) shmat(configShareMemoryId, NULL, 0);
+    configArr = (int*) shmat(configSharedMemoryId, NULL, 0);
     if (configArr == (void*) -1) {
         handleErrno("shmat()");
         return -1;
@@ -178,31 +207,31 @@ int initializeConfig(char *configShareMemoryIdString, char *goodAnalyzerShareMem
         return -1;
     }
 
-    acknowledgeInitArr = (int*) shmat(acknowledgeInitShareMemoryId, NULL, 0);
+    acknowledgeInitArr = (int*) shmat(acknowledgeInitSharedMemoryId, NULL, 0);
     if (acknowledgeInitArr == (void*) -1) {
         handleErrno("shmat()");
         return -1;
     }
 
-    endGoodDumpArr = (goodEndDump*) shmat(endGoodShareMemoryId, NULL, 0);
+    endGoodDumpArr = (goodEndDump*) shmat(endGoodSharedMemoryId, NULL, 0);
     if (endGoodDumpArr == (void*) -1) {
         handleErrno("shmat()");
         return -1;
     }
 
-    endGoodDumpSemaphore = sem_open(endGoodShareMemoryIdS, O_EXCL, 0600, 1);
+    endGoodDumpSemaphore = sem_open(endGoodSharedMemoryIdS, O_EXCL, 0600, 1);
     if (endGoodDumpSemaphore == SEM_FAILED) {
         handleErrno("sem_open()");
         return -1;
     }
 
-    acknowledgeDumpArr = (int*) shmat(acknowledgeDumpShareMemoryId, NULL, 0);
+    acknowledgeDumpArr = (int*) shmat(acknowledgeDumpSharedMemoryId, NULL, 0);
     if (acknowledgeDumpArr == (void*) -1) {
         handleErrno("shmat()");
         return -1;
     }
 
-    goodMasterArr = (Goods*) shmat(goodMasterShareMemoryId, NULL, 0);
+    goodMasterArr = (Goods*) shmat(goodMasterSharedMemoryId, NULL, 0);
     if (goodMasterArr == (void*) -1) {
         handleErrno("shmat()");
         return -1;
@@ -211,9 +240,9 @@ int initializeConfig(char *configShareMemoryIdString, char *goodAnalyzerShareMem
     return 0;
 }
 
-int initializePort(char *portIdString, char *portShareMemoryIdS) {
+int initializePort(char *portIdString, char *portSharedMemoryIdS) {
 
-    if (initializePortStruct(portIdString, portShareMemoryIdS) == -1) {
+    if (initializePortStruct(portIdString, portSharedMemoryIdS) == -1) {
         handleError("Error occurred during init of port struct");
         return -1;
     }
@@ -229,16 +258,16 @@ int initializePort(char *portIdString, char *portShareMemoryIdS) {
     }
     
     /* Aknowledge finish */
-    acknowledgeInitArr[port.id] = 1;
+    setAcknowledge();
 
     return 0;
 }
 
-int initializePortStruct(char *portIdString, char *portShareMemoryIdS) {
+int initializePortStruct(char *portIdString, char *portSharedMemoryIdS) {
         
     char *p;
     char queueKey[12];
-    int portId, portMsgId, shareMemoryId;
+    int portId, portMsgId, sharedMemoryId;
     Port *arrPort;
 
     portId = strtol(portIdString, &p, 10);
@@ -256,6 +285,7 @@ int initializePortStruct(char *portIdString, char *portShareMemoryIdS) {
     }
 
     port.id = portId;
+    port.pid = getpid();
     port.msgQueuId = portMsgId;
     if (port.id < 4) {
         port.position = getCornerCoordinates(configArr[SO_LATO], configArr[SO_LATO], port.id);
@@ -265,8 +295,8 @@ int initializePortStruct(char *portIdString, char *portShareMemoryIdS) {
     port.quays = getRandomValue(1, configArr[SO_BANCHINE]);
     port.availableQuays = port.quays;
 
-    shareMemoryId = strtol(portShareMemoryIdS, &p, 10);
-    arrPort = (Port*) shmat(shareMemoryId, NULL, 0);
+    sharedMemoryId = strtol(portSharedMemoryIdS, &p, 10);
+    arrPort = (Port*) shmat(sharedMemoryId, NULL, 0);
     if (arrPort == (void*) -1) {
         handleErrno("shmat()");
         return -1;
@@ -287,38 +317,38 @@ int initializeExchangeGoods() {
     int maxRequest, i;
 
     /* Generate shared memory for good stock */
-    goodStockShareMemoryId = generateShareMemory(sizeof(Goods) * configArr[SO_MERCI]);
-    if (goodStockShareMemoryId == -1) {
+    goodStockSharedMemoryId = generateSharedMemory(sizeof(Goods) * configArr[SO_MERCI]);
+    if (goodStockSharedMemoryId == -1) {
         handleError("Error during creation of shared memory for goods stock");
         return -1;
     }
 
-    goodStockArr = (Goods*) shmat(goodStockShareMemoryId, NULL, 0);
+    goodStockArr = (Goods*) shmat(goodStockSharedMemoryId, NULL, 0);
     if (goodStockArr == (void*) -1) {
         handleErrno("shmat()");
         return -1;
     }
 
-    goodStockSemaphore = generateSemaphore(goodStockShareMemoryId);
+    goodStockSemaphore = generateSemaphore(goodStockSharedMemoryId);
     if (goodStockSemaphore == (void*) -1) {
         handleError("Error during creation of semaphore for goods stock");
         return -1;
     }
 
     /* Generate shared memory for good request */
-    goodRequestShareMemoryId = generateShareMemory(sizeof(Goods) * configArr[SO_MERCI]);
-    if (goodRequestShareMemoryId == -1) {
+    goodRequestSharedMemoryId = generateSharedMemory(sizeof(Goods) * configArr[SO_MERCI]);
+    if (goodRequestSharedMemoryId == -1) {
         handleError("Error during creation of shared memory for goods request");
         return -1;
     }
 
-    goodRequestArr = (Goods*) shmat(goodRequestShareMemoryId, NULL, 0);
+    goodRequestArr = (Goods*) shmat(goodRequestSharedMemoryId, NULL, 0);
     if (goodRequestArr == (void*) -1) {
         handleErrno("shmat()");
         return -1;
     }
     
-    goodRequestSemaphore = generateSemaphore(goodRequestShareMemoryId);
+    goodRequestSemaphore = generateSemaphore(goodRequestSharedMemoryId);
     if (goodRequestSemaphore == (void*) -1) {
         handleError("Error during creation of semaphore for goods request");
         return -1;
@@ -373,6 +403,21 @@ int initializePortGoods() {
 
         goodStockArr[i].dailyExchange = 0;
         goodRequestArr[i].dailyExchange = 0;
+    }
+
+    return 0;
+}
+
+int handleSwell() {
+             
+    double swellTime = getNanoSeconds((double) 1 / HOUR_IN_DAY) * configArr[SO_SWELL_DURATION];
+    double waitTimeNs = getNanoSeconds(swellTime);
+    double waitTimeS = getSeconds(swellTime);
+
+    port.swell++;
+    if (safeWait(waitTimeS, waitTimeNs) == -1) {
+        handleError("Error while waiting the swall");
+        return -1;
     }
 
     return 0;
@@ -609,8 +654,11 @@ int dumpData() {
     pdd.totalGoodSold = totalDailyGoodsSold;
     pdd.totalQuays = port.quays;
     pdd.busyQuays = port.quays - port.availableQuays;
+    pdd.swell = port.swell;
 
     portDumpArr[port.id] = pdd;
+
+    port.swell = 0;
 
     /* Acknowledge end of data dump */
     acknowledgeDumpArr[port.id] = 1;
@@ -687,7 +735,7 @@ int handlePA_SE_GOOD(int queueId) {
 
     if (simulationRunning == 1) {
         /* The boat want to sell some goods */
-        if (sendMessage(queueId, PA_Y, goodRequestShareMemoryId, goodRequestShareMemoryId) == -1) {
+        if (sendMessage(queueId, PA_Y, goodRequestSharedMemoryId, goodRequestSharedMemoryId) == -1) {
             handleError("Error during send SE_GOOD");
             return -1;
         }
@@ -705,7 +753,7 @@ int handlePA_SE_SUMMARY(int goodId, int exchangeQuantity) {
 
     Goods *arrRequest;
 
-    arrRequest = (Goods*) shmat(goodRequestShareMemoryId, NULL, 0);
+    arrRequest = (Goods*) shmat(goodRequestSharedMemoryId, NULL, 0);
     if (arrRequest == (void*) -1) {
         handleErrno("shmat()");
         return -1;
@@ -725,7 +773,7 @@ int handlePA_RQ_GOOD(int queueId) {
 
     if (simulationRunning == 1) {
         /* The boat want to buy some goods */
-        if (sendMessage(queueId, PA_Y, goodStockShareMemoryId, goodStockShareMemoryId) == -1) {
+        if (sendMessage(queueId, PA_Y, goodStockSharedMemoryId, goodStockSharedMemoryId) == -1) {
             handleError("Error during send RQ_GOOD");
             return -1;
         }
@@ -763,14 +811,14 @@ int handlePA_EOT(int writeQueueId) {
     return 0;
 }
 
-int generateShareMemory(int sizeOfSegment) {
-    int shareMemoryId = shmget(IPC_PRIVATE, sizeOfSegment, 0600);
-    if (shareMemoryId == -1) {
+int generateSharedMemory(int sizeOfSegment) {
+    int sharedMemoryId = shmget(IPC_PRIVATE, sizeOfSegment, 0600);
+    if (sharedMemoryId == -1) {
         handleErrno("shmget()");
         return -1;
     }
 
-    return shareMemoryId;
+    return sharedMemoryId;
 }
 
 /* Generate a semaphore */
@@ -792,6 +840,11 @@ sem_t *generateSemaphore(int semKey) {
     }
 
     return semaphore;
+}
+
+void setAcknowledge() {
+    
+    acknowledgeInitArr[port.id] = 1;
 }
  
 int cleanup() {
@@ -831,7 +884,7 @@ int cleanup() {
         return -1;
     }
 
-    if (goodStockShareMemoryId != 0 && shmctl(goodStockShareMemoryId, IPC_RMID, NULL) == -1) {
+    if (goodStockSharedMemoryId != 0 && shmctl(goodStockSharedMemoryId, IPC_RMID, NULL) == -1) {
         handleErrno("msgctl()");
         return -1;
     }
@@ -846,7 +899,7 @@ int cleanup() {
         return -1;
     }
 
-    if (goodRequestShareMemoryId != 0 && shmctl(goodRequestShareMemoryId, IPC_RMID, NULL) == -1) {
+    if (goodRequestSharedMemoryId != 0 && shmctl(goodRequestSharedMemoryId, IPC_RMID, NULL) == -1) {
         handleErrno("msgctl()");
         return -1;
     }

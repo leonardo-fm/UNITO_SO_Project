@@ -11,7 +11,8 @@ typedef enum {
     PA_NEW_DAY,     /* New day for analyzer */
     PA_DATA_COL,    /* Data collected from boats and ports */    
     PA_FINISH,      /* Analyzer finished analyzing data */
-    PA_EOS_GSR      /* End of simulation because no more goo in stock or requested */
+    PA_EOS_GSR,     /* End of simulation because no more good in stock or requested */
+    PA_EOS_ABS      /* End of simulation because all boat sunked */
 } ProtocolActions;
 
 typedef struct {

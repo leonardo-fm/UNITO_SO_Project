@@ -1,8 +1,11 @@
+void initializeSingalsMask();
 int initializeSingalsHandlers();
-int initializeConfig(char *configShareMemoryIdString, char *goodAnalyzerShareMemoryIdString, 
-    char *boatAnalyzerShareMemoryIdString, char *acknowledgeInitShareMemoryIdS, char *endGoodShareMemoryIdS,
-    char *acknowledgeDumpShareMemoryIdS);
-int initializeBoat(char *boatIdS, char *portShareMemoryIdS);
+int initializeConfig(char *configSharedMemoryIdString, char *goodAnalyzerSharedMemoryIdString, 
+    char *boatAnalyzerSharedMemoryIdString, char *acknowledgeInitSharedMemoryIdS, char *endGoodSharedMemoryIdS,
+    char *acknowledgeDumpSharedMemoryIdS);
+int initializeBoat(char *boatIdS, char *portSharedMemoryIdS, char *boatSharedMemoryIdS);
+int handleStorm();
+void handleMalestorm();
 int work();
 int dumpData();
 int newDay();
@@ -16,5 +19,6 @@ int haveIGoodsToBuy();
 int sellGoods();
 int buyGoods();
 int getSpaceAvailableInTheHold();
+void setAcknowledge();
 int cleanup();
 void safeExit(int exitNumber);

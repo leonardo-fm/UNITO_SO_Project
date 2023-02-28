@@ -17,12 +17,15 @@
 
 #include "lib/master.h"
 
-int NUM_OF_SETTINGS = 13;
+const int HOUR_IN_DAY = 24;
+
+int NUM_OF_SETTINGS = 16;
 int *configArr = 0;
 
 int configSharedMemoryId = 0;
 int goodSharedMemoryId = 0;
 int portSharedMemoryId = 0;
+int boatSharedMemoryId = 0;
 
 int goodAnalyzerSharedMemoryId;
 int boatAnalyzerSharedMemoryId;
@@ -55,8 +58,9 @@ void handle_master_stopProcess() {
 int main() {
 
     int analyzerArgs[9];
+    int weatherArgs[4];
     int portArgs[8];
-    int boatArgs[7];
+    int boatArgs[8];
 
     printConsole("Starting program...");
 
@@ -72,6 +76,7 @@ int main() {
     }
 
     initializeEnvironment();
+    initializeSingalsMask();
     initializeSingalsHandlers();
     if (loadConfig(configSharedMemoryId) == -1) {
         safeExit(3);
@@ -172,6 +177,11 @@ int main() {
 
 
     /* ----- BOATS ----- */
+    boatSharedMemoryId = generateSharedMemory(sizeof(Boat) * configArr[SO_NAVI]);
+    if (boatSharedMemoryId == -1) {
+        safeExit(20);
+    }
+
     boatArgs[0] = configSharedMemoryId;
     boatArgs[1] = portSharedMemoryId;
     boatArgs[2] = goodAnalyzerSharedMemoryId;
@@ -179,8 +189,19 @@ int main() {
     boatArgs[4] = acknowledgeInitSharedMemoryId;
     boatArgs[5] = endgoodAnalyzerSharedMemoryId;
     boatArgs[6] = acknowledgeDumpSharedMemoryId;
+    boatArgs[7] = boatSharedMemoryId;
     if (generateSubProcesses(configArr[SO_NAVI], "./bin/nave", 1, boatArgs, sizeof(boatArgs) / sizeof(boatArgs[0])) == -1) {
         safeExit(13);
+    }
+
+
+    /* ----- WEATHER ----- */
+    weatherArgs[0] = configSharedMemoryId;
+    weatherArgs[1] = boatSharedMemoryId;
+    weatherArgs[2] = portSharedMemoryId;
+    weatherArgs[3] = acknowledgeInitSharedMemoryId;
+    if (generateSubProcesses(1, "./bin/meteo", 0, weatherArgs, sizeof(weatherArgs) / sizeof(weatherArgs[0])) == -1) {
+        safeExit(22);
     }
 
 
@@ -221,6 +242,11 @@ int checkForAnalizerToFinish() {
             break;
         case PA_EOS_GSR:
             printf("No more request or in stock of goods\n");
+            simulationFinishedEarly = 1;
+            return checkForAnalizerToFinish();
+            break;
+        case PA_EOS_ABS:
+            printf("No more boats alive\n");
             simulationFinishedEarly = 1;
             return checkForAnalizerToFinish();
             break;
@@ -289,12 +315,17 @@ int acknowledgeChildrenStatus(int checkAnalyzerSatus) {
     } while (allChildrenInit != 1);
 
     /* Reset acknowledge */
-    memset(acknowledgeInitArr, 0, entities);
+    for (i = 0; i < entities; i++)
+    {
+        if (acknowledgeInitArr[i] != -1) {
+            acknowledgeInitArr[i] = 0;
+        }
+    }
 
     return 0;
 }
 
-void setMask() {
+void initializeSingalsMask() {
 
     sigset_t sigMask;
 
@@ -310,9 +341,7 @@ void setMask() {
 int work() {
 
     int simulationDays = 0;
-
-    /* Set the mask after initialized children */
-    setMask();
+    int hourTimeSpan = getNanoSeconds((double) 1 / HOUR_IN_DAY);
 
     if (acknowledgeChildrenStatus(1) == -1) {
         handleError("Error while waiting for children to be initialized");
@@ -326,6 +355,7 @@ int work() {
     while (simulationDays < configArr[SO_DAYS] && simulationFinishedEarly == 0)
     {
         char buffer[128];
+        int currentHour = 0;
 
         snprintf(buffer, sizeof(buffer), "Day number %d", simulationDays);
         printConsole(buffer);
@@ -333,6 +363,20 @@ int work() {
         simulationDays++;
 
         /* Wait for the day (1 second) */
+        do
+        {
+            if (safeWait(0l, hourTimeSpan) == -1) {
+                handleError("Error while waiting next day master");
+                return -1;
+            }
+            /* Passed 1 hour */
+            killpg(getpid(), SIGPOLL);
+
+            currentHour++;
+
+        } while (currentHour != HOUR_IN_DAY);
+        
+        
         if (safeWait(1, 0l) == -1) {
             handleError("Error while waiting next day master");
             return -1;
@@ -533,6 +577,7 @@ int generateGoods(int firstGenerations) {
 
     randomGoodDistribution = (int *) malloc(sizeof(int) * configArr[SO_MERCI]);
     goodPerDay = configArr[SO_FILL] / configArr[SO_DAYS];
+    /* TODO attualemente anche se una merce scade noi andiamo ad assegnarle un valore che ovviamente non verrà mai usato */
     generateSubgroupSums(randomGoodDistribution, goodPerDay, configArr[SO_MERCI]);
 
     for (i = 0; i < configArr[SO_MERCI]; i++) {
@@ -591,6 +636,11 @@ int cleanup() {
     }
     
     if (portSharedMemoryId != 0 && shmctl(portSharedMemoryId, IPC_RMID, NULL) == -1) {
+        handleErrno("shmctl()");
+        return -1;
+    }
+
+    if (boatSharedMemoryId != 0 && shmctl(boatSharedMemoryId, IPC_RMID, NULL) == -1) {
         handleErrno("shmctl()");
         return -1;
     }
