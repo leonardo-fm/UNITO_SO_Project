@@ -43,25 +43,24 @@ Goods *goodRequestArr = 0;
 sem_t *goodRequestSemaphore = 0;
 
 int simulationRunning = 1;
+int inSwall = 0;
 int masterPid = 0;
 
 void handle_port_simulation_signals(int signal) {
 
     switch (signal)
     {
-        case SIGUSR1: /* Start simulation */
-        case SIGIO: /* Dump data */
-        case SIGCONT: /* Continue fimulation */
-            break;
-
-        case SIGUSR2: /* Stop simulation */
+         case SIGUSR1: 
+            printConsole("Port in SIG1");
+            setAcknowledge();
+            waitForSignal(SIGUSR2);
+            printConsole("Port in SIG2");
             setAcknowledge();
 
-            waitForSignal(SIGIO);
-            setAcknowledge();
             dumpData();
-            
-            waitForSignal(SIGCONT);
+
+            waitForSignal(SIGUSR2);
+            printConsole("Port in SIG2-2");
             setAcknowledge();
 
             newDay();
@@ -81,6 +80,11 @@ void handle_port_simulation_signals(int signal) {
         default:
             handleError("Intercept a unhandled signal");
             break;
+    }
+
+    if (inSwall == 1) {
+        printf("%d recive signal %d\n",port->id, signal);
+        waitForSignal(SIGPROF);
     }
 }
 
@@ -137,9 +141,6 @@ void initializeSingalsMask() {
 
     sigfillset(&sigMask);
     sigdelset(&sigMask, SIGUSR1);
-    sigdelset(&sigMask, SIGUSR2);
-    sigdelset(&sigMask, SIGIO);
-    sigdelset(&sigMask, SIGCONT);
     sigdelset(&sigMask, SIGPROF);
     sigdelset(&sigMask, SIGSYS);
     sigdelset(&sigMask, SIGINT);
@@ -153,20 +154,10 @@ int initializeSingalsHandlers() {
     setpgid(getpid(), getppid());
     masterPid = getppid();
 
-    signal(SIGUSR1, handle_port_simulation_signals);
-
     /* Use different method because i need to use the handler multiple times */
     signalAction.sa_flags = SA_RESTART;
     signalAction.sa_handler = &handle_port_simulation_signals;
-    sigaction(SIGUSR2, &signalAction, NULL);
-
-    signalAction.sa_flags = SA_RESTART;
-    signalAction.sa_handler = &handle_port_simulation_signals;
-    sigaction(SIGIO, &signalAction, NULL);
-
-    signalAction.sa_flags = SA_RESTART;
-    signalAction.sa_handler = &handle_port_simulation_signals;
-    sigaction(SIGCONT, &signalAction, NULL);
+    sigaction(SIGUSR1, &signalAction, NULL);
 
     signalAction.sa_flags = SA_RESTART;
     signalAction.sa_handler = &handle_port_simulation_signals;
@@ -405,15 +396,12 @@ int initializePortGoods() {
 }
 
 int handleSwell() {
-             
-    double swellTime = getNanoSeconds((double) 1 / HOUR_IN_DAY) * configArr[SO_SWELL_DURATION];
-    double waitTimeNs = getNanoSeconds(swellTime);
-    double waitTimeS = getSeconds(swellTime);
 
-    port->swell++;
-    if (safeWait(waitTimeS, waitTimeNs) == -1) {
-        handleError("Error while waiting the swall");
-        return -1;
+    if (inSwall == 0) {
+        port->swell++;
+        inSwall = 1;
+    } else {
+        inSwall = 0;
     }
 
     return 0;

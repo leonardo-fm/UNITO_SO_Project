@@ -30,6 +30,9 @@ int *acknowledgeInitArr = 0; /* TODO gesrie init di meteo */
 Boat *boatArr = 0;
 Port *portArr = 0;
 
+int weatherStatusLength = 0;
+weatherStatusHandler *weatherStatusArr = 0;
+
 int simulationRunning = 1;
 int masterPid = 0;
 
@@ -128,7 +131,7 @@ int initializeConfig(char *configSharedMemoryIdString) {
 int initializeWeather(char *boatSharedMemoryIdS, char *portSharedMemoryIdS, char *acknowledgeDumpSharedMemoryIdS) {
 
     char *p;
-
+    int i;
     int boatSharedMemoryId = strtol(boatSharedMemoryIdS, &p, 10);
     int portSharedMemoryId = strtol(portSharedMemoryIdS, &p, 10);
     int acknowledgeInitSharedMemoryId = strtol(acknowledgeDumpSharedMemoryIdS, &p, 10);
@@ -151,6 +154,16 @@ int initializeWeather(char *boatSharedMemoryIdS, char *portSharedMemoryIdS, char
         return -1;
     }
 
+    weatherStatusLength += configArr[SO_SWELL_DURATION] <= HOUR_IN_DAY ? 1 : (HOUR_IN_DAY / configArr[SO_SWELL_DURATION]) + 1;
+    weatherStatusLength += configArr[SO_STORM_DURATION] <= HOUR_IN_DAY ? 1 : (HOUR_IN_DAY / configArr[SO_STORM_DURATION]) + 1;
+
+    weatherStatusArr = (weatherStatusHandler*) malloc(sizeof(weatherStatusHandler) * weatherStatusLength);
+    for (i = 0; i < weatherStatusLength; i++)
+    {
+        weatherStatusArr[i].pid = -1;
+    }
+    
+
     return 0;
 }
 
@@ -163,11 +176,16 @@ int work() {
         handleError("Error while waiting for start");
         return -1;
     }
-
+    
     while (simulationRunning == 1)
     {   
         if (waitForSignal(SIGPOLL) != 0) {
             handleError("Error while waiting for hour");
+            return -1;
+        }
+
+        if (checkWeatherStatus() != 0) {
+            handleError("Error while checking weather status");
             return -1;
         }
 
@@ -185,7 +203,7 @@ int work() {
             }
         }
 
-        if (passedHours % configArr[SO_MALESTORM] == 0) {
+        if (passedHours % configArr[SO_MALESTORM] == 0 && passedHours != 0) {
             
             if (activateMalestorm() == -1) {
                 handleError("Failed activating malestorm");
@@ -204,6 +222,11 @@ int activateSwell() {
     int randomPortId = getRandomValue(0, configArr[SO_PORTI] - 1);
     if (kill(portArr[randomPortId].pid, SIGPROF) == -1) {
         handleErrno("kill()");
+        return -1;
+    }
+    
+    if (insertNewWeatherStatus(portArr[randomPortId].pid, configArr[SO_SWELL_DURATION], SIGPROF) == -1) {
+        handleError("Failed to insert new weather status");
         return -1;
     }
 
@@ -228,6 +251,11 @@ int activateStorm() {
         
         if (kill(boatArr[randomBoatId].pid, SIGPROF) == -1) {
             handleErrno("kill()");
+            return -1;
+        }
+
+        if (insertNewWeatherStatus(boatArr[randomBoatId].pid, configArr[SO_STORM_DURATION], SIGPROF) == -1) {
+            handleError("Failed to insert new weather status");
             return -1;
         }
     }
@@ -260,7 +288,49 @@ int activateMalestorm() {
     return 0;
 }
 
+int insertNewWeatherStatus(int pid, int remainingHours, int signalId) {
+
+    int i;
+    int foundSpace = 0;
+
+    for (i = 0; i < weatherStatusLength; i++)
+    {
+        if (weatherStatusArr[i].pid == -1) {
+            foundSpace = 1;
+            weatherStatusArr[i].pid = pid;
+            weatherStatusArr[i].remaningHour = remainingHours;
+            weatherStatusArr[i].signalToSend = signalId;
+            break;
+        }
+    }
+
+    return foundSpace == 1 ? 0 : -1; 
+}
+
+int checkWeatherStatus() {
+
+    int i;
+
+    for (i = 0; i < weatherStatusLength; i++)
+    {
+        if (weatherStatusArr[i].pid != -1) {
+            weatherStatusArr[i].remaningHour--;
+            if (weatherStatusArr[i].remaningHour == 0) {
+                if (kill(weatherStatusArr[i].pid, weatherStatusArr[i].signalToSend) == -1){
+                    handleErrno("kill()");
+                    return -1;
+                }
+                weatherStatusArr[i].pid = -1;
+            }
+        }
+    }
+
+    return 0;
+}
+
 int cleanup() {
+
+    free(weatherStatusArr);
 
     if (configArr != 0 && shmdt(configArr) == -1) {
         handleErrno("shmdt()");

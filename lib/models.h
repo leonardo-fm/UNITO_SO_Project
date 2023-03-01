@@ -118,3 +118,11 @@ typedef struct {
     int expiredInBoat;
     int exchanged;
 } goodEndDump;
+
+/* WEATEHR */
+
+typedef struct {
+    int pid;
+    int remaningHour;
+    int signalToSend;
+} weatherStatusHandler;

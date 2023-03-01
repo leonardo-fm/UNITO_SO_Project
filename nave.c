@@ -53,19 +53,18 @@ void handle_boat_simulation_signals(int signal) {
 /* TODO controllare maskere */
     switch (signal)
     {
-        case SIGUSR1: /* Start simulation */
-        case SIGIO: /* Dump data */
-        case SIGCONT: /* Continue fimulation */
-            break;
-
-        case SIGUSR2: /* Stop simulation */
+        case SIGUSR1:
+            printConsole("Boat in SIG1");
             setAcknowledge();
 
-            waitForSignal(SIGIO);
+            waitForSignal(SIGUSR2);
+            printConsole("Boat in SIG2");
             setAcknowledge();
             
             dumpData();
-            waitForSignal(SIGCONT);
+
+            waitForSignal(SIGUSR2);
+            printConsole("Boat in SIG2-2");
             setAcknowledge();
             
             newDay();
@@ -144,9 +143,6 @@ void initializeSingalsMask() {
 
     sigfillset(&sigMask);
     sigdelset(&sigMask, SIGUSR1);
-    sigdelset(&sigMask, SIGUSR2);
-    sigdelset(&sigMask, SIGIO);
-    sigdelset(&sigMask, SIGCONT);
     sigdelset(&sigMask, SIGPROF);
     sigdelset(&sigMask, SIGPWR);
     sigdelset(&sigMask, SIGSYS);
@@ -161,20 +157,10 @@ int initializeSingalsHandlers() {
     setpgid(getpid(), getppid());
     masterPid = getppid();
 
-    signal(SIGUSR1, handle_boat_simulation_signals);
-
     /* Use different method because i need to use the handler multiple times */
     signalAction.sa_flags = SA_RESTART;
     signalAction.sa_handler = &handle_boat_simulation_signals;
-    sigaction(SIGUSR2, &signalAction, NULL);
-
-    signalAction.sa_flags = SA_RESTART;
-    signalAction.sa_handler = &handle_boat_simulation_signals;
-    sigaction(SIGIO, &signalAction, NULL);
-
-    signalAction.sa_flags = SA_RESTART;
-    signalAction.sa_handler = &handle_boat_simulation_signals;
-    sigaction(SIGCONT, &signalAction, NULL);
+    sigaction(SIGUSR1, &signalAction, NULL);
 
     signalAction.sa_flags = SA_RESTART;
     signalAction.sa_handler = &handle_boat_simulation_signals;

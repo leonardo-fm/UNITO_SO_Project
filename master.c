@@ -200,7 +200,8 @@ int main() {
     weatherArgs[1] = boatSharedMemoryId;
     weatherArgs[2] = portSharedMemoryId;
     weatherArgs[3] = acknowledgeInitSharedMemoryId;
-    if (generateSubProcesses(1, "./bin/meteo", 0, weatherArgs, sizeof(weatherArgs) / sizeof(weatherArgs[0])) == -1) {
+    /* TODO rimettere a 1 i numero di processi creati */
+    if (generateSubProcesses(0, "./bin/meteo", 0, weatherArgs, sizeof(weatherArgs) / sizeof(weatherArgs[0])) == -1) {
         safeExit(22);
     }
 
@@ -309,11 +310,20 @@ int acknowledgeChildrenStatus(int checkAnalyzerSatus) {
         waitTimeInSeconds += waitTimeInSeconds;
 
         if (waitTimeInSeconds > 1) {
+            for (i = 0; i < entities; i++)
+            {
+                printf("acknowledgeInitArr[%d] = %d\n", i, acknowledgeInitArr[i]);
+            }
             handleError("Wait time for init check exeaded 1 second");
             return -1;
         }
 
     } while (allChildrenInit != 1);
+
+    for (i = 0; i < entities; i++)
+    {
+        printf("acknowledgeInitArr[%d] = %d\n", i, acknowledgeInitArr[i]);
+    }
 
     /* Reset acknowledge */
     for (i = 0; i < entities; i++)
@@ -380,11 +390,11 @@ int work() {
         if (simulationDays < configArr[SO_DAYS] && simulationFinishedEarly == 0) {
 
             /* Stop all the process */
-            killpg(getpid(), SIGUSR2);
-            debug("Sended SIGUSR2");
+            killpg(getpid(), SIGUSR1);
+            debug("Sended stop all the process");
 
             if (acknowledgeChildrenStatus(0) == -1) {
-                handleError("Error while waiting for children to SIGUSR2");
+                handleError("Error while waiting for children to stop all the process");
                 return -1;
             }
 
@@ -392,11 +402,11 @@ int work() {
             checkForAnalizerToFinish();
 
             /* Dump the data [boat, port] */
-            killpg(getpid(), SIGIO);
-            debug("Sended SIGIO");
+            killpg(getpid(), SIGUSR2);
+            debug("Sended dump the data");
 
             if (acknowledgeChildrenStatus(0) == -1) {
-                handleError("Error while waiting for children to SIGIO");
+                handleError("Error while waiting for children to dump the data");
                 return -1;
             }
             
@@ -414,12 +424,12 @@ int work() {
                 return -1;
             }
 
-            /* Coontiue the simulation */
-            killpg(getpid(), SIGCONT);
-            debug("Sended SIGCONT");
+            /* Contiue the simulation */
+            killpg(getpid(), SIGUSR2);
+            debug("Sended contiue the simulation");
 
             if (acknowledgeChildrenStatus(0) == -1) {
-                handleError("Error while waiting for children to SIGCONT");
+                handleError("Error while waiting for children to contiue the simulation");
                 return -1;
             }
         }

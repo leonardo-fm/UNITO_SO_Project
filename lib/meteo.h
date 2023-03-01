@@ -6,5 +6,7 @@ int work();
 int activateSwell();
 int activateStorm();
 int activateMalestorm();
+int insertNewWeatherStatus(int pid, int remainingHours, int signalId);
+int checkWeatherStatus();
 int cleanup();
 void safeExit(int exitNumber);
