@@ -4,9 +4,12 @@
 #include <math.h>
 #include <errno.h>
 #include <signal.h>
+#include <time.h>
 
-#include "models.h"
+#include "utilities.h"
 #include "customMacro.h"
+
+int simulationFinished = 0;
 
 /* Initialize some values for the program to work */
 void initializeEnvironment() {
@@ -17,7 +20,7 @@ void initializeEnvironment() {
 /* Generates coordinates given the dimensions of a plane. */
 /* The function used to generate the random values has been taken from: */
 /* https://stackoverflow.com/questions/13408990/how-to-generate-random-float-number-in-c */
-Coordinates getRandomCoordinates(double maxX, double maxY) {
+Coordinates getRandomCoordinates(int maxX, int maxY) {
 
     Coordinates coordinates;
     coordinates.x = rand() / (RAND_MAX / maxX);
@@ -117,7 +120,7 @@ int safeWait(int timeToSleepSec, long timeToSleepNs) {
         }
 
         ts1 = ts2;
-    } while (sleepStatus == -1 && errno == EINTR);
+    } while (sleepStatus == -1 && errno == EINTR && simulationFinished == 0);
     
     if (errno != EINTR && errno != 0) {
         handleErrno("nanosleep()");

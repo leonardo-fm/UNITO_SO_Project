@@ -1,10 +1,11 @@
-#include "customMacro.h"
 #include "models.h"
+
+extern int simulationFinished;
 
 void initializeEnvironment();
 
-Coordinates getRandomCoordinates(double maxX, double maxY);
-Coordinates getCornerCoordinates(double maxX, double maxY, int num);
+Coordinates getRandomCoordinates(int maxX, int maxY);
+Coordinates getCornerCoordinates(int maxX, int maxY, int num);
 
 int getRandomValue(int min, int max);
 void generateSubgroupSums(int *arr, int totalNumber, int subgroups);

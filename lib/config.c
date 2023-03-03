@@ -6,9 +6,9 @@
 #include <time.h>
 #include <sys/shm.h>
 
-#include "models.h"
 #include "customMacro.h"
 #include "config.h"
+#include "models.h"
 
 /* Load the configuration file (config.txt) from the root directory of the project. */
 /* Return 0 if the configuration has been loaded succesfully, -1 if some errors occurred. */

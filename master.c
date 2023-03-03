@@ -14,6 +14,7 @@
 #include "lib/config.h"
 #include "lib/utilities.h"
 #include "lib/msgPortProtocol.h"
+#include "lib/customMacro.h"
 
 #include "lib/master.h"
 
@@ -450,7 +451,7 @@ int work() {
     }
 
     printConsole("Simulation finished");
-
+    
     if (acknowledgeChildrenStatus(1) == -1) {
         handleError("Error while waiting for children to finish");
         return -1;

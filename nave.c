@@ -19,6 +19,7 @@
 #include "lib/utilities.h"
 #include "lib/config.h"
 #include "lib/msgPortProtocol.h"
+#include "lib/customMacro.h"
 
 #include "lib/nave.h"
 
@@ -84,11 +85,13 @@ void handle_boat_simulation_signals(int signal) {
 
         case SIGPWR: /* Malestorm */
             handleMalestorm();
+            simulationFinished = 1; /* For the nanosleep */
             status = Es_Finish_Simulation;
             break;
 
         case SIGSYS: /* End simulation */
             dumpData();
+            simulationFinished = 1; /* For the nanosleep */
             status = Es_Finish_Simulation;
             break;
             
@@ -335,23 +338,28 @@ int work() {
         int tradeStatus;
 
         if (status != Es_Finish_Simulation) {
+            debugId("Start travelling", boat->id);
             if (gotoPort() == -1) {
                 handleErrorId("Error while going to a port", boat->id);
                 return -1;
             }
         }
-
+        
         if (status != Es_Finish_Simulation) {
+
+            debugId("Setup trade", boat->id);
             if (setupTrade(currentPort) == -1) {
                 handleErrorId("Error during setup for the trade", boat->id);
                 return -1;
             }
 
+            debugId("Open trade", boat->id);
             tradeStatus = openTrade();
             if (tradeStatus == -1) {
                 handleErrorId("Error during trade", boat->id);
                 return -1;
             } 
+            debugId("Close trade", boat->id);
 
             if (haveIGoodsToSell() == 0) {
                 setStatus(In_Sea);

@@ -18,6 +18,7 @@
 
 #include "lib/utilities.h"
 #include "lib/config.h"
+#include "lib/customMacro.h"
 
 #include "lib/meteo.h"
 

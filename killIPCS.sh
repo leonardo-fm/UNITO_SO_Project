@@ -1,9 +1,12 @@
 #!/bin/bash
 
-killall -9 nave
-killall -9 porto
-killall -9 analyzer
-killall -9 meteo
+if [[ "$1" == "-k" ]]; then
+  killall -9 nave
+  killall -9 porto
+  killall -9 analyzer
+  killall -9 meteo
+  echo "killed process"
+fi
 
 ME=lo
 
@@ -11,6 +14,7 @@ IPCS_S=`ipcs -s | egrep "0x[0-9a-f]+ [0-9]+" | grep $ME | cut -f2 -d" "`
 IPCS_M=`ipcs -m | egrep "0x[0-9a-f]+ [0-9]+" | grep $ME | cut -f2 -d" "`
 IPCS_Q=`ipcs -q | egrep "0x[0-9a-f]+ [0-9]+" | grep $ME | cut -f2 -d" "`
 
+echo "Cleaned ipcs"
 
 for id in $IPCS_M; do
   ipcrm -m $id;

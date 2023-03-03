@@ -12,9 +12,11 @@
 
 #include <linux/limits.h>
 
-#include "lib/analyzer.h"
 #include "lib/msgPortProtocol.h"
 #include "lib/utilities.h"
+#include "lib/customMacro.h"
+
+#include "lib/analyzer.h"
 
 int *configArr = 0;
 

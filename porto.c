@@ -16,6 +16,7 @@
 #include "lib/config.h"
 #include "lib/utilities.h"
 #include "lib/msgPortProtocol.h"
+#include "lib/customMacro.h"
 
 #include "lib/porto.h"
 
