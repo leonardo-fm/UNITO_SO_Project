@@ -51,13 +51,14 @@ int simulationRunning = 1;
 int simulationFinishedEarly = 0;
 int masterPid = 0;
 int totalBoatSunk = 0;
+int analyzerId = -1;
 
 void handle_analyzer_simulation_signals(int signal) {
 
     switch (signal)
     {
         /* End of the simulation */
-        case SIGSYS:
+        case SIGUSR2:
             simulationRunning = 0;
             break;
         default:
@@ -116,10 +117,10 @@ void initializeSingalsMask() {
 
     sigset_t sigMask;
 
-    /* Mask all signals except SIGINT and SIGSYS */
+    /* Mask all signals except SIGINT and SIGUSR2 */
     sigfillset(&sigMask);
     sigdelset(&sigMask, SIGINT);
-    sigdelset(&sigMask, SIGSYS);
+    sigdelset(&sigMask, SIGUSR2);
     sigprocmask(SIG_SETMASK, &sigMask, NULL);
 }
 
@@ -128,7 +129,7 @@ int initializeSingalsHandlers() {
     setpgid(getpid(), getppid());
     masterPid = getppid();
 
-    signal(SIGSYS, handle_analyzer_simulation_signals);
+    signal(SIGUSR2, handle_analyzer_simulation_signals);
 
     return 0;
 }
@@ -203,6 +204,8 @@ int initializeAnalyzer(char *goodAnalyzerSharedMemoryIdString, char *boatAnalyze
     memset(endPortArr, 0, size);
 
     createLogFile();
+
+    analyzerId = configArr[SO_PORTI] + configArr[SO_NAVI];
 
     /* Acknowledge finish init */
     setAcknowledge();
@@ -626,7 +629,7 @@ int generateEndPortStat() {
 
 void setAcknowledge() {
 
-    acknowledgeInitArr[configArr[SO_PORTI] + configArr[SO_NAVI]] = 1;
+    acknowledgeInitArr[analyzerId] = 1;
 }
 
 int cleanup() { 

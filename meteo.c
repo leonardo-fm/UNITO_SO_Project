@@ -36,6 +36,7 @@ weatherStatusHandler *weatherStatusArr = 0;
 
 int simulationRunning = 1;
 int masterPid = 0;
+int weatherId = -1;
 
 void handle_weather_simulation_signals(int signal) {
 
@@ -68,6 +69,7 @@ int main(int argx, char *argv[]) {
 
     (void) argx;
     initializeSingalsMask();
+    initializeEnvironment();
     initializeSingalsHandlers();
 
     if (initializeConfig(argv[0]) == -1) {
@@ -84,6 +86,9 @@ int main(int argx, char *argv[]) {
         handleError("Error during weather work");
         safeExit(3);
     }
+
+    /* Acknowledge finish */
+    setAcknowledge();
 
     if (cleanup() == -1) {
         handleError("weather cleanup failed");
@@ -164,6 +169,10 @@ int initializeWeather(char *boatSharedMemoryIdS, char *portSharedMemoryIdS, char
         weatherStatusArr[i].pid = -1;
     }
     
+    weatherId = configArr[SO_PORTI] + configArr[SO_NAVI] + 1;
+
+    /* Acknowledge finish init */
+    setAcknowledge();
 
     return 0;
 }
@@ -189,16 +198,17 @@ int work() {
 
         /* Activate storm and swell */
         if (passedHours % HOUR_IN_DAY == 0) {
-            
+            /*
             if (activateSwell() == -1) {
                 handleError("Failed activating swall");
                 return -1;
             }
-
             if (activateStorm() == -1) {
                 handleError("Failed activating storm");
                 return -1;
             }
+*/
+/* TODO Controllare perchè quando le barche sono in viaggio riesco a fare l'acknowledge, mentre se sono in una tempesta no*/
         }
 
         if (passedHours % configArr[SO_MALESTORM] == 0 && passedHours != 0) {
@@ -235,23 +245,24 @@ int activateStorm() {
 
     int randomBoatId = -1, i, randomStartId;
     randomStartId = getRandomValue(0, configArr[SO_NAVI] - 1);
-    
+
     for (i = 0; i < configArr[SO_NAVI]; i++)
     {
         int currentId = (randomStartId + i) % configArr[SO_NAVI];
+ 
         if (boatArr[currentId].state == In_Sea_Travelling || boatArr[currentId].state == In_Sea_Empty_Travelling) {
-            randomBoatId = i;
+            randomBoatId = currentId;
             break;
         }
     }
 
     if (randomBoatId != -1) {
-        
+
         if (kill(boatArr[randomBoatId].pid, SIGPROF) == -1) {
             handleErrno("kill()");
             return -1;
         }
-
+        
         if (insertNewWeatherStatus(boatArr[randomBoatId].pid, configArr[SO_STORM_DURATION], SIGPROF) == -1) {
             handleError("Failed to insert new weather status");
             return -1;
@@ -324,6 +335,11 @@ int checkWeatherStatus() {
     }
 
     return 0;
+}
+
+void setAcknowledge() {
+
+    acknowledgeInitArr[weatherId] = 1;
 }
 
 int cleanup() {

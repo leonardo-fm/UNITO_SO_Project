@@ -8,5 +8,6 @@ int activateStorm();
 int activateMalestorm();
 int insertNewWeatherStatus(int pid, int remainingHours, int signalId);
 int checkWeatherStatus();
+void setAcknowledge();
 int cleanup();
 void safeExit(int exitNumber);

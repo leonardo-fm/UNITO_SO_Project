@@ -10,11 +10,15 @@
 #include "customMacro.h"
 
 int simulationFinished = 0;
+struct timespec remaningWaitingTime;
 
 /* Initialize some values for the program to work */
 void initializeEnvironment() {
 
-    srand(getpid());
+    int randomSeed = rand() % getpid();
+    srand(randomSeed);
+
+    debugId("Random seed", randomSeed);
 }
 
 /* Generates coordinates given the dimensions of a plane. */
@@ -124,6 +128,22 @@ int safeWait(int timeToSleepSec, long timeToSleepNs) {
     
     if (errno != EINTR && errno != 0) {
         handleErrno("nanosleep()");
+        return -1;
+    }
+
+    return 0;
+}
+
+int checkForWaiting() {
+    
+    double waitTimeS = remaningWaitingTime.tv_sec;
+    double waitTimeNs = remaningWaitingTime.tv_nsec;
+
+    remaningWaitingTime.tv_sec = 0;
+    remaningWaitingTime.tv_nsec = 0;
+    
+    if (safeWait(waitTimeS, waitTimeNs) == -1) {
+        handleError("Error while waiting the storm");
         return -1;
     }
 

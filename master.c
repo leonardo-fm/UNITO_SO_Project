@@ -87,7 +87,7 @@ int main() {
      
     /* ----- ALL ----- */
     acknowledgeInitSharedMemoryId = 
-        generateSharedMemory(sizeof(int) * (configArr[SO_NAVI] + configArr[SO_PORTI] + 1)); /* +1 analyzer */
+        generateSharedMemory(sizeof(int) * (configArr[SO_NAVI] + configArr[SO_PORTI] + 2)); /* +2 analyzer, weather */
     if (acknowledgeInitSharedMemoryId == -1) {
         safeExit(10);
     }
@@ -202,8 +202,7 @@ int main() {
     weatherArgs[1] = boatSharedMemoryId;
     weatherArgs[2] = portSharedMemoryId;
     weatherArgs[3] = acknowledgeInitSharedMemoryId;
-    /* TODO rimettere a 1 i numero di processi creati */
-    if (generateSubProcesses(0, "./bin/meteo", 0, weatherArgs, sizeof(weatherArgs) / sizeof(weatherArgs[0])) == -1) {
+    if (generateSubProcesses(1, "./bin/meteo", 0, weatherArgs, sizeof(weatherArgs) / sizeof(weatherArgs[0])) == -1) {
         safeExit(22);
     }
 
@@ -302,7 +301,7 @@ int acknowledgeChildrenStatus(int checkAnalyzerSatus) {
         for (i = 0; i < entities; i++)
         {
             if (acknowledgeInitArr[i] == 0) {
-                debug("Failed init check");
+                debug("Failed acknowledge check");
                 allChildrenInit = 0;
                 break;
             }
@@ -316,12 +315,22 @@ int acknowledgeChildrenStatus(int checkAnalyzerSatus) {
             for (i = 0; i < entities; i++)
             {
                 char buffer[128];
-                snprintf(buffer, sizeof(buffer), "AcknowledgeInitArr[%d] = %d", i, acknowledgeInitArr[i]);
+                char *entety;
+
+                if (i < configArr[SO_PORTI]) {
+                    entety = "P";
+                } else if (i >= configArr[SO_PORTI] && i < (configArr[SO_PORTI] + configArr[SO_NAVI])) {
+                    entety = "B";
+                } else {
+                    entety = "A";
+                }
+
+                snprintf(buffer, sizeof(buffer), "(%s) AcknowledgeInitArr[%d] = %d", entety, i, acknowledgeInitArr[i]);
                 debug(buffer);
             }
 #endif
 
-            handleError("Wait time for init check exeaded 1 second");
+            handleError("Wait time for acknowledge check exeaded 1 second");
             return -1;
         }
 
@@ -361,6 +370,33 @@ int work() {
         return -1;
     }
 
+#ifdef DEBUG
+
+    int i;
+    char buffer[128];
+    Port *portArr;
+    Boat *boatArr;
+
+    portArr = (Port*) shmat(portSharedMemoryId, NULL, 0);
+    boatArr = (Boat*) shmat(boatSharedMemoryId, NULL, 0);
+
+    for (i = 0; i < configArr[SO_PORTI]; i++)
+    {
+        snprintf(buffer, sizeof(buffer), "(%d) Port[%d]->pid = %d", i, i, portArr[i].pid);
+        debug(buffer);
+    }
+    
+    for (i = 0; i < configArr[SO_NAVI]; i++)
+    {
+        snprintf(buffer, sizeof(buffer), "(%d) Boat[%d]->pid = %d", configArr[SO_PORTI] + i, i, boatArr[i].pid);
+        debug(buffer);
+    }
+
+    shmdt(portArr);
+    shmdt(boatArr);
+
+#endif
+
     /* Start simulation [boat, port, analyzer] */
     killpg(getpid(), SIGCONT);
     debug("Sended SIGCONT");
@@ -391,13 +427,13 @@ int work() {
 
         if (simulationDays < configArr[SO_DAYS] && simulationFinishedEarly == 0) {
 
-            /* Stop all the process */
+            /* Stop all */
             killpg(getpid(), SIGUSR1);
             killpg(getpid(), SIGCONT);
             debug("Sended stop all the process");
 
             if (acknowledgeChildrenStatus(0) == -1) {
-                handleError("Error while waiting for children to stop all the process");
+                handleError("Error while waiting for children to stop");
                 return -1;
             }
 
@@ -440,8 +476,8 @@ int work() {
         }
     }
 
-    killpg(getpid(), SIGSYS);
-    debug("Sended SUGSYS");
+    killpg(getpid(), SIGUSR2);
+    debug("Sended signal finish simulation");
 
     if (simulationFinishedEarly == 0) {
         if (sendMessage(analyzerWritingMsgQueue, PA_NEW_DAY, -1, -1) == -1) {

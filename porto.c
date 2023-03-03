@@ -77,11 +77,11 @@ void handle_port_simulation_signals(int signal) {
             break;
 
         case SIGPROF: /* Swell */
-            printf("SWELL for id %d\n", port->id);
+            debugId("Swell signal recieved", port->id);
             handleSwell();
             break;
 
-        case SIGSYS: /* End simulation */
+        case SIGUSR2: /* End simulation */
             dumpData();
             status = Es_Finish_Simulation;
             stopWaitingQueues = 1;
@@ -93,7 +93,7 @@ void handle_port_simulation_signals(int signal) {
     }
 
     if (inSwall == 1) {
-        printf("%d recive signal %d\n",port->id, signal);
+        debugId("Finish swell", port->id);
         waitForSignal(SIGPROF);
     }
 }
@@ -153,9 +153,9 @@ void initializeSingalsMask() {
 
     sigfillset(&sigMask);
     sigdelset(&sigMask, SIGUSR1);
+    sigdelset(&sigMask, SIGUSR2);
 
     sigdelset(&sigMask, SIGPROF);
-    sigdelset(&sigMask, SIGSYS);
     sigdelset(&sigMask, SIGINT);
     sigprocmask(SIG_SETMASK, &sigMask, NULL);
 }
@@ -176,7 +176,7 @@ int initializeSingalsHandlers() {
     signalAction.sa_handler = &handle_port_simulation_signals;
     sigaction(SIGPROF, &signalAction, NULL);
 
-    signal(SIGSYS, handle_port_simulation_signals);
+    signal(SIGUSR2, handle_port_simulation_signals);
     signal(SIGINT, handle_port_stopProcess);
 
     return 0;

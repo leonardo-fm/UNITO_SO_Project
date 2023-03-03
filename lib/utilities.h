@@ -1,6 +1,7 @@
 #include "models.h"
 
 extern int simulationFinished;
+extern struct timespec remaningWaitingTime;
 
 void initializeEnvironment();
 
@@ -13,5 +14,6 @@ void generateSubgroupSums(int *arr, int totalNumber, int subgroups);
 int getSeconds(double timeInSeconds);
 long getNanoSeconds(double timeInSeconds);
 int safeWait(int timeToSleepSec, long timeToSleepNs);
+int checkForWaiting();
 
 int waitForSignal(int signal);

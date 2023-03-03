@@ -80,6 +80,7 @@ void handle_boat_simulation_signals(int signal) {
             break;
 
         case SIGPROF: /* Storm */
+            debugId("Found a storm", boat->id);
             handleStorm();
             break;
 
@@ -89,7 +90,7 @@ void handle_boat_simulation_signals(int signal) {
             status = Es_Finish_Simulation;
             break;
 
-        case SIGSYS: /* End simulation */
+        case SIGUSR2: /* End simulation */
             dumpData();
             simulationFinished = 1; /* For the nanosleep */
             status = Es_Finish_Simulation;
@@ -156,10 +157,10 @@ void initializeSingalsMask() {
 
     sigfillset(&sigMask);
     sigdelset(&sigMask, SIGUSR1);
+    sigdelset(&sigMask, SIGUSR2);
 
     sigdelset(&sigMask, SIGPROF);
     sigdelset(&sigMask, SIGPWR);
-    sigdelset(&sigMask, SIGSYS);
     sigdelset(&sigMask, SIGINT);
     sigprocmask(SIG_SETMASK, &sigMask, NULL);
 }
@@ -181,7 +182,7 @@ int initializeSingalsHandlers() {
     sigaction(SIGPROF, &signalAction, NULL);
 
     signal(SIGPWR, handle_boat_simulation_signals);
-    signal(SIGSYS, handle_boat_simulation_signals);
+    signal(SIGUSR2, handle_boat_simulation_signals);
     signal(SIGINT, handle_boat_stopProcess);
 
     return 0;
@@ -925,7 +926,6 @@ int getSpaceAvailableInTheHold() {
 }
 
 void setAcknowledge() {
-
     if (boat->state != Sunk) {
         acknowledgeInitArr[boat->id] = 1;
     }

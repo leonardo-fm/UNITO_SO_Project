@@ -35,10 +35,6 @@ debug: build-debug
 	clear 
 	./bin/master
 
-debug-l: build-debug
-	clear 
-	./bin/master > $(LOG_FILE)
-
 build-debug: master_d nave_d porto_d analyzer_d meteo_d
 
 master_d: master.c
