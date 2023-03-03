@@ -26,6 +26,16 @@ typedef enum {
     SO_MALESTORM
 } ConfigurationVariables;
 
+typedef enum { 
+    Es_Initializing,
+    Es_Running,
+    Es_Stopped,
+    Es_Waiting_Start,
+    Es_Waiting_Dump,
+    Es_Waiting_Continue,
+    Es_Finish_Simulation,
+    Es_Finish_Execution
+} ExecutionStates;
 
 /* GOODS */
 

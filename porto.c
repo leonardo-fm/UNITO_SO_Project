@@ -42,28 +42,37 @@ int goodRequestSharedMemoryId = 0;
 Goods *goodRequestArr = 0;
 sem_t *goodRequestSemaphore = 0;
 
-int simulationRunning = 1;
 int inSwall = 0;
 int masterPid = 0;
+ExecutionStates status = Es_Initializing;
 
 void handle_port_simulation_signals(int signal) {
 
     switch (signal)
     {
-         case SIGUSR1: 
-            printConsole("Port in SIG1");
-            setAcknowledge();
-            waitForSignal(SIGUSR2);
-            printConsole("Port in SIG2");
-            setAcknowledge();
-
-            dumpData();
-
-            waitForSignal(SIGUSR2);
-            printConsole("Port in SIG2-2");
-            setAcknowledge();
-
-            newDay();
+         case SIGUSR1:
+            switch (status)
+            {
+                case Es_Running:
+                    setAcknowledge();
+                    status = Es_Waiting_Dump;
+                    raise(SIGSTOP);
+                    break;
+                case Es_Waiting_Dump:
+                    dumpData();
+                    setAcknowledge();
+                    status = Es_Waiting_Continue;
+                    raise(SIGSTOP);
+                    break;
+                case Es_Waiting_Continue:
+                    setAcknowledge();
+                    status = Es_Running;
+                    newDay();
+                    break;                
+                default:
+                    handleErrorId("Recived not handled status", port->id);
+                    break;
+            }
             break;
 
         case SIGPROF: /* Swell */
@@ -73,12 +82,12 @@ void handle_port_simulation_signals(int signal) {
 
         case SIGSYS: /* End simulation */
             dumpData();
-            simulationRunning = 0;
+            status = Es_Finish_Simulation;
             stopWaitingQueues = 1;
             break;
             
         default:
-            handleError("Intercept a unhandled signal");
+            handleErrorId("Intercept a unhandled signal", port->id);
             break;
     }
 
@@ -95,7 +104,7 @@ void handle_port_stopProcess() {
     sigfillset(&mask);
     sigprocmask(SIG_BLOCK, &mask, NULL);
     
-    debug("Stopping port...");
+    debugId("Stopping port...", port->id);
     cleanup();
     exit(0);
 }
@@ -110,25 +119,27 @@ int main(int argx, char *argv[]) {
     initializeSingalsHandlers();
 
     if (initializeConfig(argv[1], argv[4], argv[5], argv[6], argv[7], argv[8], argv[3]) == -1) {
-        handleError("Initialization of port config failed");
+        handleErrorId("Initialization of port config failed", port->id);
         safeExit(1);
     }
 
     if (initializePort(argv[0], argv[2]) == -1) {
-        handleError("Initialization of port failed");
+        handleErrorId("Initialization of port failed", port->id);
         safeExit(2);
     }
 
     if (work() == -1) {
-        handleError("Error during port work");
+        handleErrorId("Error during port work", port->id);
         safeExit(3);
     }
 
     /* Aknowledge finish */
+    debugId("Port finish work", port->id);
+    status = Es_Finish_Execution;
     setAcknowledge();
     
     if (cleanup() == -1) {
-        handleError("Port cleanup failed");
+        handleErrorId("Port cleanup failed", port->id);
         safeExit(4);
     }
 
@@ -141,6 +152,7 @@ void initializeSingalsMask() {
 
     sigfillset(&sigMask);
     sigdelset(&sigMask, SIGUSR1);
+
     sigdelset(&sigMask, SIGPROF);
     sigdelset(&sigMask, SIGSYS);
     sigdelset(&sigMask, SIGINT);
@@ -184,49 +196,49 @@ int initializeConfig(char *configSharedMemoryIdString, char *goodAnalyzerSharedM
     
     configArr = (int*) shmat(configSharedMemoryId, NULL, 0);
     if (configArr == (void*) -1) {
-        handleErrno("shmat()");
+        handleErrnoId("shmat()", port->id);
         return -1;
     }
 
     goodDumpArr = (goodDailyDump*) shmat(goodAnalyzerSharedMemoryId, NULL, 0);
     if (goodDumpArr == (void*) -1) {
-        handleErrno("shmat()");
+        handleErrnoId("shmat()", port->id);
         return -1;
     }
 
     portDumpArr = (portDailyDump*) shmat(portAnalyzerSharedMemoryId, NULL, 0);
     if (portDumpArr == (void*) -1) {
-        handleErrno("shmat()");
+        handleErrnoId("shmat()", port->id);
         return -1;
     }
 
     acknowledgeInitArr = (int*) shmat(acknowledgeInitSharedMemoryId, NULL, 0);
     if (acknowledgeInitArr == (void*) -1) {
-        handleErrno("shmat()");
+        handleErrnoId("shmat()", port->id);
         return -1;
     }
 
     endGoodDumpArr = (goodEndDump*) shmat(endGoodSharedMemoryId, NULL, 0);
     if (endGoodDumpArr == (void*) -1) {
-        handleErrno("shmat()");
+        handleErrnoId("shmat()", port->id);
         return -1;
     }
 
     endGoodDumpSemaphore = sem_open(endGoodSharedMemoryIdS, O_EXCL, 0600, 1);
     if (endGoodDumpSemaphore == SEM_FAILED) {
-        handleErrno("sem_open()");
+        handleErrnoId("sem_open()", port->id);
         return -1;
     }
 
     acknowledgeDumpArr = (int*) shmat(acknowledgeDumpSharedMemoryId, NULL, 0);
     if (acknowledgeDumpArr == (void*) -1) {
-        handleErrno("shmat()");
+        handleErrnoId("shmat()", port->id);
         return -1;
     }
 
     goodMasterArr = (Goods*) shmat(goodMasterSharedMemoryId, NULL, 0);
     if (goodMasterArr == (void*) -1) {
-        handleErrno("shmat()");
+        handleErrnoId("shmat()", port->id);
         return -1;
     }
 
@@ -236,17 +248,17 @@ int initializeConfig(char *configSharedMemoryIdString, char *goodAnalyzerSharedM
 int initializePort(char *portIdString, char *portSharedMemoryIdS) {
 
     if (initializePortStruct(portIdString, portSharedMemoryIdS) == -1) {
-        handleError("Error occurred during init of port struct");
+        handleErrorId("Error occurred during init of port struct", port->id);
         return -1;
     }
 
     if (initializeExchangeGoods() == -1) {
-        handleError("Error occurred during init of goods exchange");
+        handleErrorId("Error occurred during init of goods exchange", port->id);
         return -1;
     }
 
     if (initializePortGoods() == -1) {
-        handleError("Error occurred during init of goods");
+        handleErrorId("Error occurred during init of goods", port->id);
         return -1;
     }
 
@@ -266,20 +278,20 @@ int initializePortStruct(char *portIdString, char *portSharedMemoryIdS) {
     
     /* Generate a message queue to comunicate with the boats */
     if (sprintf(queueKey, "%d", portId) == -1) {
-        handleError("Error during conversion of the port id to a string");
+        handleErrorId("Error during conversion of the port id to a string", port->id);
         return -1;
     }
 
     portMsgId = msgget(IPC_PRIVATE, IPC_CREAT | 0600);
     if (portMsgId == -1) {
-        handleErrno("msgget()");
+        handleErrnoId("msgget()", port->id);
         return -1;
     }
 
     sharedMemoryId = strtol(portSharedMemoryIdS, &p, 10);
     portArr = (Port*) shmat(sharedMemoryId, NULL, 0);
     if (portArr == (void*) -1) {
-        handleErrno("shmat()");
+        handleErrnoId("shmat()", port->id);
         return -1;
     }
     
@@ -306,38 +318,38 @@ int initializeExchangeGoods() {
     /* Generate shared memory for good stock */
     goodStockSharedMemoryId = generateSharedMemory(sizeof(Goods) * configArr[SO_MERCI]);
     if (goodStockSharedMemoryId == -1) {
-        handleError("Error during creation of shared memory for goods stock");
+        handleErrorId("Error during creation of shared memory for goods stock", port->id);
         return -1;
     }
 
     goodStockArr = (Goods*) shmat(goodStockSharedMemoryId, NULL, 0);
     if (goodStockArr == (void*) -1) {
-        handleErrno("shmat()");
+        handleErrnoId("shmat()", port->id);
         return -1;
     }
 
     goodStockSemaphore = generateSemaphore(goodStockSharedMemoryId);
     if (goodStockSemaphore == (void*) -1) {
-        handleError("Error during creation of semaphore for goods stock");
+        handleErrorId("Error during creation of semaphore for goods stock", port->id);
         return -1;
     }
 
     /* Generate shared memory for good request */
     goodRequestSharedMemoryId = generateSharedMemory(sizeof(Goods) * configArr[SO_MERCI]);
     if (goodRequestSharedMemoryId == -1) {
-        handleError("Error during creation of shared memory for goods request");
+        handleErrorId("Error during creation of shared memory for goods request", port->id);
         return -1;
     }
 
     goodRequestArr = (Goods*) shmat(goodRequestSharedMemoryId, NULL, 0);
     if (goodRequestArr == (void*) -1) {
-        handleErrno("shmat()");
+        handleErrnoId("shmat()", port->id);
         return -1;
     }
     
     goodRequestSemaphore = generateSemaphore(goodRequestSharedMemoryId);
     if (goodRequestSemaphore == (void*) -1) {
-        handleError("Error during creation of semaphore for goods request");
+        handleErrorId("Error during creation of semaphore for goods request", port->id);
         return -1;
     }
 
@@ -413,10 +425,8 @@ int work() {
     int *queues[2];
 
     /* wait for simulation to start */
-    if (waitForSignal(SIGUSR1) != 0) {
-        handleError("Error while waiting for start");
-        return -1;
-    }
+    status = Es_Waiting_Start;
+    raise(SIGSTOP);
 
     /* queue[0][n] read queue | queue[1][n] write queue */
     maxQauys = port->availableQuays;
@@ -429,15 +439,16 @@ int work() {
     }
 
     /* Remains alive until all the quays are empty to avoid boats closing errors */
-    while (simulationRunning == 1 || (port->quays - port->availableQuays) > 0)
+    status = Es_Running;
+    while (status != Es_Finish_Simulation || (port->quays - port->availableQuays) > 0)
     {
-        if (simulationRunning == 1) {
+        if (status != Es_Finish_Simulation) {
             PortMessage setupMsg;
             int flag = port->availableQuays == port->quays ? 0 : IPC_NOWAIT;
             int setupMsgStatus = receiveMessage(port->msgQueuId, &setupMsg, flag, 1);
 
             if (setupMsgStatus == -1) {
-                handleError("Error during reciving message from boat");
+                handleErrorId("Error during reciving message from boat", port->id);
                 return -1;
             }
 
@@ -475,7 +486,7 @@ int work() {
             msgStatus = receiveMessage(readingMsgQueue, &receivedMsg, 0, 0);
 
             if (msgStatus == -1) {
-                handleError("Error during reciving message from boat");
+                handleErrorId("Error during reciving message from boat", port->id);
                 return -1;
             }
 
@@ -488,7 +499,7 @@ int work() {
                     case PA_ACCEPT:
                         acceptResponse = handlePA_ACCEPT(writingMsgQueue);
                         if (acceptResponse == -1) {
-                            handleError("Error during ACCEPT handling");
+                            handleErrorId("Error during ACCEPT handling", port->id);
                             return -1;
                         };
                         if (acceptResponse == 1) {
@@ -498,31 +509,31 @@ int work() {
                         break;
                     case PA_SE_GOOD:
                         if (handlePA_SE_GOOD(writingMsgQueue) == -1) {
-                            handleError("Error during SE_GOOD handling");
+                            handleErrorId("Error during SE_GOOD handling", port->id);
                             return -1;
                         };
                         break;
                     case PA_SE_SUMMARY:
                         if (handlePA_SE_SUMMARY(receivedMsg.msg.data.data1, receivedMsg.msg.data.data2) == -1) {
-                            handleError("Error during PA_SE_SUMMARY handling");
+                            handleErrorId("Error during PA_SE_SUMMARY handling", port->id);
                             return -1;
                         };
                         break;
                     case PA_RQ_GOOD:
                         if (handlePA_RQ_GOOD(writingMsgQueue) == -1) {
-                            handleError("Error during RQ_GOOD handling");
+                            handleErrorId("Error during RQ_GOOD handling", port->id);
                             return -1;
                         };
                         break;
                     case PA_RQ_SUMMARY:
                         if (handlePA_RQ_SUMMARY(receivedMsg.msg.data.data1, receivedMsg.msg.data.data2) == -1) {
-                            handleError("Error during PA_RQ_SUMMARY handling");
+                            handleErrorId("Error during PA_RQ_SUMMARY handling", port->id);
                             return -1;
                         };
                         break;
                     case PA_EOT:
                         if (handlePA_EOT(writingMsgQueue) == -1) {
-                            handleError("Error during EOT handling");
+                            handleErrorId("Error during EOT handling", port->id);
                             return -1;
                         };
                         queues[0][j] = -1;
@@ -536,7 +547,7 @@ int work() {
     }
 
     if (freePendingMsgs() == -1) {
-        handleError("Error while freeing pending messages");
+        handleErrorId("Error while freeing pending messages", port->id);
         return -1;
     }
 
@@ -561,7 +572,7 @@ int freePendingMsgs() {
     
     msgInfoResponse = msgctl(port->msgQueuId, IPC_STAT, &msgInfo);
     if (msgInfoResponse == -1) {
-        handleErrno("msgctl()");
+        handleErrnoId("msgctl()", port->id);
         return -1;
     }
 
@@ -571,12 +582,12 @@ int freePendingMsgs() {
         int pendingMsgStatus = receiveMessage(port->msgQueuId, &pendingMsg, 0, 0);
 
         if (pendingMsgStatus == -1) {
-            handleError("Error during reciving message from boat on pending messages");
+            handleErrorId("Error during reciving message from boat on pending messages", port->id);
             return -1;
         }
         
         if (sendMessage(pendingMsg.msg.data.data2, PA_N, -1, -1) == -1) {
-            handleError("Error during send NO");
+            handleErrorId("Error during send NO", port->id);
             return -1;
         }
     }
@@ -661,10 +672,10 @@ int newDay() {
     if (getNewGoods == 1) {
         
         if (initializePortGoods() == -1) {
-            handleError("Error occurred during daily init of goods");
+            handleErrorId("Error occurred during daily init of goods", port->id);
             return -1;
         }
-        debug("Got new good for the port");
+        debugId("Got new good for the port", port->id);
     } else {
         
         /* TODO nel mentre che avviene uno scambio con una nave, se la merce scade allora la nave la conta come da se e anche il porto */
@@ -687,7 +698,7 @@ int newDay() {
     }
 
     snprintf(buffer, sizeof(buffer), "Port %d, free quays %d/%d", port->id, port->availableQuays, port->quays);
-    debug(buffer);
+    debugId(buffer, port->id);
 
     return 0;
 }
@@ -695,9 +706,9 @@ int newDay() {
 /* If the port accept the boat request return 0, if not return 1, for errors return -1 */
 int handlePA_ACCEPT(int queueId) {
 
-    if (port->availableQuays > 0 && simulationRunning == 1) {
+    if (port->availableQuays > 0 && status != Es_Finish_Simulation) {
         if (sendMessage(queueId, PA_Y, -1, -1) == -1) {
-            handleError("Error during send ACCEPT");
+            handleErrorId("Error during send ACCEPT", port->id);
             return -1;
         }
 
@@ -705,7 +716,7 @@ int handlePA_ACCEPT(int queueId) {
 
     } else {
         if (sendMessage(queueId, PA_N, -1, -1) == -1) {
-            handleError("Error during send ACCEPT");
+            handleErrorId("Error during send ACCEPT", port->id);
             return -1;
         }
 
@@ -717,15 +728,15 @@ int handlePA_ACCEPT(int queueId) {
 
 int handlePA_SE_GOOD(int queueId) {
 
-    if (simulationRunning == 1) {
+    if (status != Es_Finish_Simulation) {
         /* The boat want to sell some goods */
         if (sendMessage(queueId, PA_Y, goodRequestSharedMemoryId, goodRequestSharedMemoryId) == -1) {
-            handleError("Error during send SE_GOOD");
+            handleErrorId("Error during send SE_GOOD", port->id);
             return -1;
         }
     } else {
         if (sendMessage(queueId, PA_N, -1, -1) == -1) {
-            handleError("Error during send SE NO");
+            handleErrorId("Error during send SE NO", port->id);
             return -1;
         }
     }
@@ -739,14 +750,14 @@ int handlePA_SE_SUMMARY(int goodId, int exchangeQuantity) {
 
     arrRequest = (Goods*) shmat(goodRequestSharedMemoryId, NULL, 0);
     if (arrRequest == (void*) -1) {
-        handleErrno("shmat()");
+        handleErrnoId("shmat()", port->id);
         return -1;
     }
 
     arrRequest[goodId].dailyExchange += exchangeQuantity;
 
     if (shmdt(arrRequest) == -1) {
-        handleErrno("shmdt()");
+        handleErrnoId("shmdt()", port->id);
         return -1;
     }
 
@@ -755,15 +766,15 @@ int handlePA_SE_SUMMARY(int goodId, int exchangeQuantity) {
 
 int handlePA_RQ_GOOD(int queueId) {
 
-    if (simulationRunning == 1) {
+    if (status != Es_Finish_Simulation) {
         /* The boat want to buy some goods */
         if (sendMessage(queueId, PA_Y, goodStockSharedMemoryId, goodStockSharedMemoryId) == -1) {
-            handleError("Error during send RQ_GOOD");
+            handleErrorId("Error during send RQ_GOOD", port->id);
             return -1;
         }
     } else {
         if (sendMessage(queueId, PA_N, -1, -1) == -1) {
-            handleError("Error during send RQ NO");
+            handleErrorId("Error during send RQ NO", port->id);
             return -1;
         }
     }
@@ -786,7 +797,7 @@ int handlePA_EOT(int writeQueueId) {
 
     /* The port acknowledge to end the transmission */
     if (sendMessage(writeQueueId, PA_EOT, 0, 0) == -1) {
-        handleError("Error during send EOT");
+        handleErrorId("Error during send EOT", port->id);
         return -1;
     }
 
@@ -798,7 +809,7 @@ int handlePA_EOT(int writeQueueId) {
 int generateSharedMemory(int sizeOfSegment) {
     int sharedMemoryId = shmget(IPC_PRIVATE, sizeOfSegment, 0600);
     if (sharedMemoryId == -1) {
-        handleErrno("shmget()");
+        handleErrnoId("shmget()", port->id);
         return -1;
     }
 
@@ -813,13 +824,13 @@ sem_t *generateSemaphore(int semKey) {
     sem_t *semaphore;
 
     if (sprintf(semaphoreKey, "%d", semKey) == -1) {
-        handleError("Error during conversion of the pid for semaphore to a string");
+        handleErrorId("Error during conversion of the pid for semaphore to a string", port->id);
         return (sem_t*) -1;
     }   
 
     semaphore = sem_open(semaphoreKey, O_CREAT, 0600, 1);
     if (semaphore == SEM_FAILED) {
-        handleErrno("sem_open()");
+        handleErrnoId("sem_open()", port->id);
         return (sem_t*) -1;
     }
 
@@ -834,86 +845,86 @@ void setAcknowledge() {
 int cleanup() {
 
     if (configArr != 0 && shmdt(configArr) == -1) {
-        handleErrno("shmdt()");
+        handleErrnoId("shmdt()", port->id);
         return -1;
     }
 
     if (goodDumpArr != 0 && shmdt(goodDumpArr) == -1) {
-        handleErrno("shmdt()");
+        handleErrnoId("shmdt()", port->id);
         return -1;
     }
 
     if (portDumpArr != 0 && shmdt(portDumpArr) == -1) {
-        handleErrno("shmdt()");
+        handleErrnoId("shmdt()", port->id);
         return -1;
     }
      
     if (endGoodDumpArr != 0 && shmdt(endGoodDumpArr) == -1) {
-        handleErrno("shmdt()");
+        handleErrnoId("shmdt()", port->id);
         return -1;
     }
 
     if (endGoodDumpSemaphore != 0 && sem_close(endGoodDumpSemaphore) == -1) {
-        handleErrno("shmdt()");
+        handleErrnoId("shmdt()", port->id);
         return -1;
     }
 
     if (port->msgQueuId != 0 && msgctl(port->msgQueuId, IPC_RMID, NULL) == -1) {
-        handleErrno("msgctl()");
+        handleErrnoId("msgctl()", port->id);
         return -1;
     }
 
     if (goodStockArr != 0 && shmdt(goodStockArr) == -1) {
-        handleErrno("shmdt()");
+        handleErrnoId("shmdt()", port->id);
         return -1;
     }
 
     if (goodStockSharedMemoryId != 0 && shmctl(goodStockSharedMemoryId, IPC_RMID, NULL) == -1) {
-        handleErrno("msgctl()");
+        handleErrnoId("msgctl()", port->id);
         return -1;
     }
 
     if (goodStockSemaphore != 0 && sem_close(goodStockSemaphore) == -1) {
-        handleErrno("sem_close()");
+        handleErrnoId("sem_close()", port->id);
         return -1;
     }
     
     if (goodRequestArr != 0 && shmdt(goodRequestArr) == -1) {
-        handleErrno("shmdt()");
+        handleErrnoId("shmdt()", port->id);
         return -1;
     }
 
     if (goodRequestSharedMemoryId != 0 && shmctl(goodRequestSharedMemoryId, IPC_RMID, NULL) == -1) {
-        handleErrno("msgctl()");
+        handleErrnoId("msgctl()", port->id);
         return -1;
     }
 
     if (goodRequestSemaphore != 0 && sem_close(goodRequestSemaphore) == -1) {
-        handleErrno("sem_close()");
+        handleErrnoId("sem_close()", port->id);
         return -1;
     }
 
     if (acknowledgeInitArr != 0 && shmdt(acknowledgeInitArr) == -1) {
-        handleErrno("shmdt()");
+        handleErrnoId("shmdt()", port->id);
         return -1;
     }
 
     if (acknowledgeDumpArr != 0 && shmdt(acknowledgeDumpArr) == -1) {
-        handleErrno("shmdt()");
+        handleErrnoId("shmdt()", port->id);
         return -1;
     }
 
     if (goodMasterArr != 0 && shmdt(goodMasterArr) == -1) {
-        handleErrno("shmdt()");
+        handleErrnoId("shmdt()", port->id);
         return -1;
     }
 
     if (portArr != 0 && shmdt(portArr) == -1) {
-        handleErrno("shmdt()");
+        handleErrnoId("shmdt()", port->id);
         return -1;
     }
 
-    debug("Port clean");
+    debugId("Port clean", port->id);
 
     return 0;
 }
@@ -921,7 +932,7 @@ int cleanup() {
 void safeExit(int exitNumber) {
 
     cleanup();
-    if (simulationRunning == 1 && masterPid == getppid()) {
+    if (status != Es_Finish_Simulation && masterPid == getppid()) {
         kill(getppid(), SIGINT);
     }
     exit(exitNumber);

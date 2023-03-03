@@ -51,6 +51,7 @@ void handle_master_stopProcess() {
 
     printConsole("\nStopping program...");
     killpg(getpid(), SIGINT);
+    killpg(getpid(), SIGCONT);
     cleanup();
     exit(0);
 }
@@ -300,7 +301,6 @@ int acknowledgeChildrenStatus(int checkAnalyzerSatus) {
         for (i = 0; i < entities; i++)
         {
             if (acknowledgeInitArr[i] == 0) {
-                printf("Master failed id %d\n", i);
                 debug("Failed init check");
                 allChildrenInit = 0;
                 break;
@@ -310,20 +310,21 @@ int acknowledgeChildrenStatus(int checkAnalyzerSatus) {
         waitTimeInSeconds += waitTimeInSeconds;
 
         if (waitTimeInSeconds > 1) {
+
+#ifdef DEBUG
             for (i = 0; i < entities; i++)
             {
-                printf("acknowledgeInitArr[%d] = %d\n", i, acknowledgeInitArr[i]);
+                char buffer[128];
+                snprintf(buffer, sizeof(buffer), "AcknowledgeInitArr[%d] = %d", i, acknowledgeInitArr[i]);
+                debug(buffer);
             }
+#endif
+
             handleError("Wait time for init check exeaded 1 second");
             return -1;
         }
 
     } while (allChildrenInit != 1);
-
-    for (i = 0; i < entities; i++)
-    {
-        printf("acknowledgeInitArr[%d] = %d\n", i, acknowledgeInitArr[i]);
-    }
 
     /* Reset acknowledge */
     for (i = 0; i < entities; i++)
@@ -360,8 +361,8 @@ int work() {
     }
 
     /* Start simulation [boat, port, analyzer] */
-    killpg(getpid(), SIGUSR1);
-    debug("Sended SIGUSR1");
+    killpg(getpid(), SIGCONT);
+    debug("Sended SIGCONT");
 
     while (simulationDays < configArr[SO_DAYS] && simulationFinishedEarly == 0)
     {
@@ -391,6 +392,7 @@ int work() {
 
             /* Stop all the process */
             killpg(getpid(), SIGUSR1);
+            killpg(getpid(), SIGCONT);
             debug("Sended stop all the process");
 
             if (acknowledgeChildrenStatus(0) == -1) {
@@ -402,7 +404,8 @@ int work() {
             checkForAnalizerToFinish();
 
             /* Dump the data [boat, port] */
-            killpg(getpid(), SIGUSR2);
+            killpg(getpid(), SIGUSR1);
+            killpg(getpid(), SIGCONT);
             debug("Sended dump the data");
 
             if (acknowledgeChildrenStatus(0) == -1) {
@@ -425,7 +428,8 @@ int work() {
             }
 
             /* Contiue the simulation */
-            killpg(getpid(), SIGUSR2);
+            killpg(getpid(), SIGUSR1);
+            killpg(getpid(), SIGCONT);
             debug("Sended contiue the simulation");
 
             if (acknowledgeChildrenStatus(0) == -1) {

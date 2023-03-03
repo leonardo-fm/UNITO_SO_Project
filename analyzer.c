@@ -278,10 +278,7 @@ int work() {
     }
 
     /* wait for simulation to start */
-    if (waitForSignal(SIGUSR1) != 0) {
-        handleError("Error while waiting for start");
-        return -1;
-    }
+    raise(SIGSTOP);
 
     /* Not execute on first day */
     if (sendMessage(writingMsgQueue, PA_FINISH, -1, -1) == -1) {

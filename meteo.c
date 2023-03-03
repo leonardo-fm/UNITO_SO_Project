@@ -172,10 +172,7 @@ int work() {
     int passedHours = 0;
 
     /* wait for simulation to start */
-    if (waitForSignal(SIGUSR1) != 0) {
-        handleError("Error while waiting for start");
-        return -1;
-    }
+    raise(SIGSTOP);
     
     while (simulationRunning == 1)
     {   
