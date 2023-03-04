@@ -100,28 +100,28 @@ long getNanoSeconds(double timeInSeconds) {
 
 int safeWait(int timeToSleepSec, long timeToSleepNs) {
 
-    struct timespec ts1, ts2;
+    struct timespec waitTime, remainingTime;
     int sleepStatus;
 
-    ts1.tv_sec = timeToSleepSec;
-    ts1.tv_nsec = timeToSleepNs;
+    waitTime.tv_sec = timeToSleepSec;
+    waitTime.tv_nsec = timeToSleepNs;
 
     do {
         /* Reset errno error */
         errno = 0; 
         if (addingTime.tv_sec != 0 || addingTime.tv_nsec != 0) {
-            ts1.tv_sec += addingTime.tv_sec;
-            ts1.tv_nsec += addingTime.tv_nsec;
+            waitTime.tv_sec += addingTime.tv_sec;
+            waitTime.tv_nsec += addingTime.tv_nsec;
             addingTime.tv_sec = 0;
             addingTime.tv_nsec = 0;            
         }
 
-        sleepStatus = nanosleep(&ts1 , &ts2);
+        sleepStatus = nanosleep(&waitTime , &remainingTime);
         if (sleepStatus == 0) {
             break;
         }
 
-        ts1 = ts2;
+        waitTime = remainingTime;
     } while (sleepStatus == -1 && errno == EINTR && simulationFinished == 0);
     
     if (errno != EINTR && errno != 0) {

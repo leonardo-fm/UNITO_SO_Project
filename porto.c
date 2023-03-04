@@ -416,13 +416,13 @@ int handleSwell() {
 
 int waitForSwell() {
     
-    double swellTime = getNanoSeconds((double) 1 / HOUR_IN_DAY) * configArr[SO_SWELL_DURATION];
+    double swellTime = (double) 1 / HOUR_IN_DAY * configArr[SO_SWELL_DURATION];
     double waitTimeNs = getNanoSeconds(swellTime);
     double waitTimeS = getSeconds(swellTime);
 
     addingTime.tv_sec = waitTimeS;
     addingTime.tv_nsec = waitTimeNs;
-    
+
     if (safeWait(waitTimeS, waitTimeNs) == -1) {
         handleErrorId("Error while waiting the swell", port->id);
         return -1;

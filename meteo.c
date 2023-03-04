@@ -179,7 +179,7 @@ int work() {
             return -1;
         }
 
-        /* Activate storm and swell */
+        /* Activate storm and swell *//*
         if (passedHours % HOUR_IN_DAY == 0) {
             
             if (activateSwell() == -1) {
@@ -199,7 +199,7 @@ int work() {
                 handleError("Failed activating malestorm");
                 return -1;
             }
-        }
+        }*/
 
         passedHours++;
     }
@@ -215,7 +215,6 @@ int activateSwell() {
     for (i = 0; i < configArr[SO_PORTI]; i++)
     {
         int currentId = (randomStartId + i) % configArr[SO_PORTI];
- 
         if (portArr[currentId].state == Operative) {
             randomPortId = currentId;
             break;

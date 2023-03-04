@@ -554,8 +554,10 @@ int openTrade() {
 
 int trade() {
 
-    if (haveIGoodsToSell() == 0 && status != Es_Finish_Simulation) {
+    printf("%d == 0 && %d != 6\n", haveIGoodsToSell(), status);
 
+    if (haveIGoodsToSell() == 0 && status != Es_Finish_Simulation) {
+        printConsole("********** Try to sell");
         if (sellGoods() == -1) {
             handleErrorId("Error during selling goods", boat->id);
             return -1;
@@ -632,13 +634,16 @@ int closeTrade() {
 int haveIGoodsToSell() {
     
     int i = 0;
+    int haveGoodToSell = 0;
     for (i = 0; i < configArr[SO_MERCI]; i++) {
+        printf("goodHold[%d].loadInTon = %d\n", i, goodHold[i].loadInTon);
         if (goodHold[i].loadInTon > 0 ) {
-            return 0;
+            haveGoodToSell = 1;
+            break;
         }    
     }
 
-    return -1;
+    return haveGoodToSell == 1 ? 0 : -1;
 }
 
 /* Return 0 if there are space available in the hold, otherwise -1 */
@@ -730,7 +735,7 @@ int sellGoods() {
             
             sem_wait(semaphore);
             currentSellingGood = i;
-
+printConsole("SELL");
             /* If x >= 0 OK, x < 0 not enought good to sell */
             if (goodArr[i].loadInTon - goodHold[i].loadInTon >= 0) {
                 exchange = goodHold[i].loadInTon;
@@ -770,7 +775,11 @@ int sellGoods() {
                 handleErrorId("Failed to send PA_SE_SUMMARY comunication", boat->id);
                 return -1;
             }
-        }    
+        } else {
+            /*goodHold[i].loadInTon > 0 && goodHold[i].state != Expired_In_The_Boat && boat->state == In_Port_Exchange*/
+            printf("%d > 0 && %d != 5 && %d == 4", goodHold[i].loadInTon, goodHold[i].state, boat->state);
+            printConsole(".");
+        }
     }
 
     if (sem_close(semaphore) == -1) {
@@ -788,7 +797,7 @@ int sellGoods() {
 
 int buyGoods() {
 
-    int waitResponse, i, availableSpace;
+    int waitResponse, i, availableSpace, additionalGoods;
     PortMessage response;
     
     char semaphoreKey[12];
@@ -853,20 +862,23 @@ int buyGoods() {
             int exchange;
             double loadTonPerDay;
             long waitTimeS, waitTimeNs;
+            int currentAvailableSpace = availableSpace + additionalGoods;
 
             sem_wait(semaphore);
 
             exchange = 0;
+            additionalGoods = 0;
 
             /* If x >= 0 OK, x < 0 not enought good to buy */
-            if (goodArr[i].loadInTon - availableSpace >= 0) {
-                exchange = availableSpace;
-                goodArr[i].loadInTon -= availableSpace;
-                goodHold[i].loadInTon += availableSpace;
+            if (goodArr[i].loadInTon - currentAvailableSpace >= 0) {
+                exchange = currentAvailableSpace;
+                goodArr[i].loadInTon -= currentAvailableSpace;
+                goodHold[i].loadInTon += currentAvailableSpace;
             } else {
                 exchange = goodArr[i].loadInTon;
                 goodArr[i].loadInTon = 0;
                 goodHold[i].loadInTon += exchange;
+                additionalGoods += currentAvailableSpace - exchange;
             }
 
             /* Set expire date */
@@ -902,7 +914,9 @@ int buyGoods() {
             if (getSpaceAvailableInTheHold() == 0) {
                 break;
             }
-        }    
+        } else {
+            additionalGoods += availableSpace;
+        }
     }
 
     if (sem_close(semaphore) == -1) {
