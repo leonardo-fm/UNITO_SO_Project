@@ -11,6 +11,8 @@
 
 int simulationFinished = 0;
 struct timespec remaningWaitingTime;
+struct timespec addingTime;
+
 
 /* Initialize some values for the program to work */
 void initializeEnvironment() {
@@ -117,6 +119,12 @@ int safeWait(int timeToSleepSec, long timeToSleepNs) {
     do {
         /* Reset errno error */
         errno = 0; 
+        if (addingTime.tv_sec != 0 || addingTime.tv_nsec != 0) {
+            ts1.tv_sec += addingTime.tv_sec;
+            ts1.tv_nsec += addingTime.tv_nsec;
+            addingTime.tv_sec = 0;
+            addingTime.tv_nsec = 0;            
+        }
 
         sleepStatus = nanosleep(&ts1 , &ts2);
         if (sleepStatus == 0) {

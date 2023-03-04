@@ -198,17 +198,16 @@ int work() {
 
         /* Activate storm and swell */
         if (passedHours % HOUR_IN_DAY == 0) {
-            /*
+            
             if (activateSwell() == -1) {
                 handleError("Failed activating swall");
                 return -1;
             }
+
             if (activateStorm() == -1) {
                 handleError("Failed activating storm");
                 return -1;
             }
-*/
-/* TODO Controllare perchè quando le barche sono in viaggio riesco a fare l'acknowledge, mentre se sono in una tempesta no*/
         }
 
         if (passedHours % configArr[SO_MALESTORM] == 0 && passedHours != 0) {
@@ -227,15 +226,24 @@ int work() {
 
 int activateSwell() {
     
-    int randomPortId = getRandomValue(0, configArr[SO_PORTI] - 1);
-    if (kill(portArr[randomPortId].pid, SIGPROF) == -1) {
-        handleErrno("kill()");
-        return -1;
+    int randomPortId = -1, i, randomStartId;
+    randomStartId = getRandomValue(0, configArr[SO_PORTI] - 1);
+
+    for (i = 0; i < configArr[SO_PORTI]; i++)
+    {
+        int currentId = (randomStartId + i) % configArr[SO_PORTI];
+ 
+        if (portArr[currentId].state == Operative) {
+            randomPortId = currentId;
+            break;
+        }
     }
-    
-    if (insertNewWeatherStatus(portArr[randomPortId].pid, configArr[SO_SWELL_DURATION], SIGPROF) == -1) {
-        handleError("Failed to insert new weather status");
-        return -1;
+
+    if (randomPortId != -1) {
+        if (kill(portArr[randomPortId].pid, SIGPROF) == -1) {
+            handleErrno("kill()");
+            return -1;
+        }
     }
 
     return 0;
@@ -260,11 +268,6 @@ int activateStorm() {
 
         if (kill(boatArr[randomBoatId].pid, SIGPROF) == -1) {
             handleErrno("kill()");
-            return -1;
-        }
-        
-        if (insertNewWeatherStatus(boatArr[randomBoatId].pid, configArr[SO_STORM_DURATION], SIGPROF) == -1) {
-            handleError("Failed to insert new weather status");
             return -1;
         }
     }

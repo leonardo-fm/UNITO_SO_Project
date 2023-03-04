@@ -8,6 +8,7 @@ int initializePortStruct(char *portIdString, char *portSharedMemoryIdS);
 int initializeExchangeGoods();
 int initializePortGoods();
 int handleSwell();
+int waitForSwell();
 int work();
 int dumpData();
 int newDay();

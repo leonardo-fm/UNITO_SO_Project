@@ -371,30 +371,30 @@ int work() {
     }
 
 #ifdef DEBUG
+    if (1 == 1) { /* If i don't use the if it return a warning for the init of i */
+        int i;
+        char buffer[128];
+        Port *portArr;
+        Boat *boatArr;
 
-    int i;
-    char buffer[128];
-    Port *portArr;
-    Boat *boatArr;
+        portArr = (Port*) shmat(portSharedMemoryId, NULL, 0);
+        boatArr = (Boat*) shmat(boatSharedMemoryId, NULL, 0);
 
-    portArr = (Port*) shmat(portSharedMemoryId, NULL, 0);
-    boatArr = (Boat*) shmat(boatSharedMemoryId, NULL, 0);
+        for (i = 0; i < configArr[SO_PORTI]; i++)
+        {
+            snprintf(buffer, sizeof(buffer), "(%d) Port[%d]->pid = %d", i, i, portArr[i].pid);
+            debug(buffer);
+        }
+        
+        for (i = 0; i < configArr[SO_NAVI]; i++)
+        {
+            snprintf(buffer, sizeof(buffer), "(%d) Boat[%d]->pid = %d", configArr[SO_PORTI] + i, i, boatArr[i].pid);
+            debug(buffer);
+        }
 
-    for (i = 0; i < configArr[SO_PORTI]; i++)
-    {
-        snprintf(buffer, sizeof(buffer), "(%d) Port[%d]->pid = %d", i, i, portArr[i].pid);
-        debug(buffer);
+        shmdt(portArr);
+        shmdt(boatArr);
     }
-    
-    for (i = 0; i < configArr[SO_NAVI]; i++)
-    {
-        snprintf(buffer, sizeof(buffer), "(%d) Boat[%d]->pid = %d", configArr[SO_PORTI] + i, i, boatArr[i].pid);
-        debug(buffer);
-    }
-
-    shmdt(portArr);
-    shmdt(boatArr);
-
 #endif
 
     /* Start simulation [boat, port, analyzer] */

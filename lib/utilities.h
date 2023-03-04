@@ -2,6 +2,7 @@
 
 extern int simulationFinished;
 extern struct timespec remaningWaitingTime;
+extern struct timespec addingTime;
 
 void initializeEnvironment();
 

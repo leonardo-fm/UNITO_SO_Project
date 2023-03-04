@@ -59,10 +59,10 @@ typedef struct {
 
 typedef enum { 
     In_Sea,
-    In_Sea_Empty,
-    In_Port_Exchange,
     In_Sea_Travelling,
+    In_Sea_Empty,
     In_Sea_Empty_Travelling,
+    In_Port_Exchange,
     Sunk
 } BoatState;
 
@@ -79,6 +79,11 @@ typedef struct {
 
 /* PORT */
 
+typedef enum { 
+    Operative,
+    In_Swell
+} PortState;
+
 typedef struct {
     int id;
     int pid;
@@ -86,6 +91,7 @@ typedef struct {
     int quays;
     int availableQuays;
     int swell;
+    PortState state;
     Coordinates position;
 } Port;
 

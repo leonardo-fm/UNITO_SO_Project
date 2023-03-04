@@ -80,8 +80,9 @@ void handle_boat_simulation_signals(int signal) {
             break;
 
         case SIGPROF: /* Storm */
-            debugId("Found a storm", boat->id);
+            debugId("Start a storm", boat->id);
             handleStorm();
+            debugId("Finish a storm", boat->id);
             break;
 
         case SIGPWR: /* Malestorm */
@@ -305,10 +306,8 @@ int handleStorm() {
     double waitTimeS = getSeconds(stormTime);
 
     boat->storm++;
-    if (safeWait(waitTimeS, waitTimeNs) == -1) {
-        handleErrorId("Error while waiting the storm", boat->id);
-        return -1;
-    }
+    addingTime.tv_sec = waitTimeS;
+    addingTime.tv_nsec = waitTimeNs;
 
     return 0;
 }
@@ -344,6 +343,7 @@ int work() {
                 handleErrorId("Error while going to a port", boat->id);
                 return -1;
             }
+            debugId("Finish travelling", boat->id);
         }
         
         if (status != Es_Finish_Simulation) {

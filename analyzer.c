@@ -471,7 +471,7 @@ int generateDailyGoodReport() {
 
 int generateDailyBoatReport() {
     
-    /* In_Sea = 0, In_Sea_Empty = 1, In_Port_Exchange = 2, In_Sea_Travelling = 3, In_Sea_Empty_Travelling = 4 */
+    /* In_Sea/Travelling = 0/1 | In_Sea_Empty/Travelling = 2/3 | In_Port_Exchange = 4 */
     int boatStatus[5] = {0};
     int boatHitByStorm = 0;
     int boatSunk = 0;
@@ -485,10 +485,9 @@ int generateDailyBoatReport() {
     }
 
     /* Print data */
-    /* In_Sea/Travelling = 0/3 | In_Sea_Empty/Travelling = 1/4 | In_Port_Exchange = 2 */
     fprintf(filePointer, "%-12s%-12s%-12s%-12s%-12s\n", "BOAT_SEA", "BOAT_SEA_E", "BOAT_EXCH", "STORM", "MALESTORM");
     fprintf(filePointer, "%-12d%-12d%-12d%-12d%-12d\n", 
-        boatStatus[0] + boatStatus[3], boatStatus[1], boatStatus[2] + boatStatus[4], boatHitByStorm, boatSunk);
+        boatStatus[0] + boatStatus[1], boatStatus[2] + boatStatus[3], boatStatus[4], boatHitByStorm, boatSunk);
     fprintf(filePointer, "\n");
 
     /* Cleaning of the memory after analyzing data */

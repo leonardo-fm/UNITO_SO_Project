@@ -43,15 +43,16 @@ int goodRequestSharedMemoryId = 0;
 Goods *goodRequestArr = 0;
 sem_t *goodRequestSemaphore = 0;
 
-int inSwall = 0;
+int inSwell = 0;
 int masterPid = 0;
 ExecutionStates status = Es_Initializing;
 
 void handle_port_simulation_signals(int signal) {
-
+    
     switch (signal)
     {
          case SIGUSR1:
+            debugId("Recieved SIGUSR1", port->id);
             switch (status)
             {
                 case Es_Running:
@@ -77,7 +78,7 @@ void handle_port_simulation_signals(int signal) {
             break;
 
         case SIGPROF: /* Swell */
-            debugId("Swell signal recieved", port->id);
+            debugId("Start swell", port->id);
             handleSwell();
             break;
 
@@ -90,11 +91,6 @@ void handle_port_simulation_signals(int signal) {
         default:
             handleErrorId("Intercept a unhandled signal", port->id);
             break;
-    }
-
-    if (inSwall == 1) {
-        debugId("Finish swell", port->id);
-        waitForSignal(SIGPROF);
     }
 }
 
@@ -299,6 +295,7 @@ int initializePortStruct(char *portIdString, char *portSharedMemoryIdS) {
     portArr[portId].id = portId;
     portArr[portId].pid = getpid();
     portArr[portId].msgQueuId = portMsgId;
+    portArr[portId].state = Operative;
     if (portArr[portId].id < 4) {
         portArr[portId].position = getCornerCoordinates(configArr[SO_LATO], configArr[SO_LATO], portArr[portId].id);
     } else {
@@ -410,12 +407,29 @@ int initializePortGoods() {
 
 int handleSwell() {
 
-    if (inSwall == 0) {
-        port->swell++;
-        inSwall = 1;
-    } else {
-        inSwall = 0;
+    port->swell++;
+    port->state = In_Swell;
+    inSwell = 1;
+
+    return 0;
+}
+
+int waitForSwell() {
+    
+    double swellTime = getNanoSeconds((double) 1 / HOUR_IN_DAY) * configArr[SO_SWELL_DURATION];
+    double waitTimeNs = getNanoSeconds(swellTime);
+    double waitTimeS = getSeconds(swellTime);
+
+    addingTime.tv_sec = waitTimeS;
+    addingTime.tv_nsec = waitTimeNs;
+    
+    if (safeWait(waitTimeS, waitTimeNs) == -1) {
+        handleErrorId("Error while waiting the swell", port->id);
+        return -1;
     }
+
+    inSwell = 0;
+    port->state = Operative;
 
     return 0;
 }
@@ -443,6 +457,14 @@ int work() {
     status = Es_Running;
     while (status != Es_Finish_Simulation || (port->quays - port->availableQuays) > 0)
     {
+        if (inSwell == 1) {
+            if (waitForSwell() == -1) {
+                handleErrorId("Error during waiting swell", port->id);
+                return -1;
+            }
+            debugId("Finish swell", port->id);
+        }
+
         if (status != Es_Finish_Simulation) {
             PortMessage setupMsg;
             int flag = port->availableQuays == port->quays ? 0 : IPC_NOWAIT;
