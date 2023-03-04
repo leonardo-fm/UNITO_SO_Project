@@ -243,12 +243,12 @@ int checkForAnalizerToFinish() {
         case PA_FINISH:
             break;
         case PA_EOS_GSR:
-            printf("No more request or in stock of goods\n");
+            printConsole("No more request or in stock of goods");
             simulationFinishedEarly = 1;
             return checkForAnalizerToFinish();
             break;
         case PA_EOS_ABS:
-            printf("No more boats alive\n");
+            printConsole("No more boats alive");
             simulationFinishedEarly = 1;
             return checkForAnalizerToFinish();
             break;
@@ -412,7 +412,7 @@ int work() {
 #ifdef DEBUG
         snprintf(buffer, sizeof(buffer), "||| ------------------- Day number %d ------------------- |||", simulationDays);
 #else
-        snprintf(buffer, sizeof(buffer), "Day number %d", simulationDays);
+        snprintf(buffer, sizeof(buffer), "Starting day %d", simulationDays);
 #endif
         printConsole(buffer);
 

@@ -52,7 +52,6 @@ void handle_port_simulation_signals(int signal) {
     switch (signal)
     {
          case SIGUSR1:
-            debugId("Recieved SIGUSR1", port->id);
             switch (status)
             {
                 case Es_Running:
@@ -770,20 +769,7 @@ int handlePA_SE_GOOD(int queueId) {
 
 int handlePA_SE_SUMMARY(int goodId, int exchangeQuantity) {
 
-    Goods *arrRequest;
-
-    arrRequest = (Goods*) shmat(goodRequestSharedMemoryId, NULL, 0);
-    if (arrRequest == (void*) -1) {
-        handleErrnoId("shmat()", port->id);
-        return -1;
-    }
-
-    arrRequest[goodId].dailyExchange += exchangeQuantity;
-
-    if (shmdt(arrRequest) == -1) {
-        handleErrnoId("shmdt()", port->id);
-        return -1;
-    }
+    goodRequestArr[goodId].dailyExchange += exchangeQuantity;
 
     return 0;
 }

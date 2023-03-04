@@ -491,14 +491,17 @@ int generateDailyBoatReport() {
     fprintf(filePointer, "\n");
 
     /* Cleaning of the memory after analyzing data */
-    memset(boatDumpArr, 0, configArr[SO_NAVI]);
+    memset(boatDumpArr, 0, sizeof(boatDailyDump) * configArr[SO_NAVI]);
 
     totalBoatSunk += boatSunk;
-
+    
     if (totalBoatSunk == configArr[SO_NAVI]) {
+
         sendMessage(writingMsgQueue, PA_EOS_ABS, -1, -1);
         simulationFinishedEarly = 1;
         debug("Analyzer sent PA_EOS_ABS to master");
+    } else if (totalBoatSunk > configArr[SO_NAVI]) {
+        handleError("Mor sunk boats the boats");
     }
 
     return 0;
@@ -541,7 +544,7 @@ int generateDailyPortReport() {
     }
 
     /* Cleaning of the memory after analyzing data */
-    memset(portDumpArr, 0, configArr[SO_PORTI]);
+    memset(portDumpArr, 0, sizeof(portDailyDump) * configArr[SO_PORTI]);
 
     return 0;
 }
@@ -651,6 +654,7 @@ int cleanup() {
         return -1;
     }
 
+
     if (boatDumpArr != 0 && shmdt(boatDumpArr) == -1) {
         handleErrno("shmdt()");
         return -1;
@@ -660,6 +664,7 @@ int cleanup() {
         handleErrno("shmctl()");
         return -1;
     }
+
 
     if (portDumpArr != 0 && shmdt(portDumpArr) == -1) {
         handleErrno("shmdt()");
@@ -671,10 +676,6 @@ int cleanup() {
         return -1;
     }
 
-    if (portAnalyzerSharedMemoryId != 0 && shmctl(portAnalyzerSharedMemoryId, IPC_RMID, NULL) == -1) {
-        handleErrno("shmctl()");
-        return -1;
-    }
 
     if (endGoodArr != 0 && shmdt(endGoodArr) == -1) {
         handleErrno("shmdt()");
@@ -686,6 +687,7 @@ int cleanup() {
         return -1;
     }
 
+
     if (writingMsgQueue != 0 && msgctl(writingMsgQueue, IPC_RMID, NULL) == -1) {
         handleErrno("msgctl()");
         return -1;
@@ -696,10 +698,12 @@ int cleanup() {
         return -1;
     }
 
+
     if (acknowledgeInitArr != 0 && shmdt(acknowledgeInitArr) == -1) {
         handleErrno("shmdt()");
         return -1;
     }
+
 
     if (acknowledgeDumpArr != 0 && shmdt(acknowledgeDumpArr) == -1) {
         handleErrno("shmdt()");

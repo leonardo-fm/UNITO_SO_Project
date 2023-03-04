@@ -71,27 +71,19 @@ int getRandomValue(int min, int max) {
     return randomValue;
 }
 
-/* Generate by ChatGPT */
 void generateSubgroupSums(int *arr, int totalNumber, int subgroups) {
 
-    int remaining, i, j, temp;
+    int remaining, i;
     
     remaining = totalNumber;
     for (i = 0; i < subgroups - 1; i++) {
-        int rand_num = rand() % (remaining - (subgroups - i - 1)) + 1;
-        arr[i] = rand_num;
-        remaining -= rand_num;
+        int averageValue = remaining / (subgroups - i);
+        int randomAmmount = rand() % averageValue;
+        remaining -= randomAmmount;
+        arr[i] = randomAmmount;
     }
 
     arr[subgroups - 1] = remaining;
-
-    /* Shuffle the array to ensure randomness */
-    for (i = subgroups - 1; i > 0; i--) {
-        j = rand() % (i + 1);
-        temp = arr[i];
-        arr[i] = arr[j];
-        arr[j] = temp;
-    }
 }
 
 int getSeconds(double timeInSeconds) {

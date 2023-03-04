@@ -41,6 +41,7 @@ void handle_weather_simulation_signals(int signal) {
     {
         case SIGUSR2: /* End simulation */
             simulationRunning = 0;
+            raise(SIGPOLL); /* Avoid stuck on sigwait(SIGPOLL) */
             break;
             
         default:

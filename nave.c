@@ -48,9 +48,17 @@ Boat *boat;
 Goods *goodHold;
 
 int masterPid = 0;
+int isSunk = 0;
 ExecutionStates status = Es_Initializing;
 
 void handle_boat_simulation_signals(int signal) {
+
+    char buffer[128];
+
+    if (boat->state == Sunk) {
+        /* If the boat is sunk not handle execution signals */
+        return;
+    }
 
     switch (signal)
     {
@@ -72,9 +80,10 @@ void handle_boat_simulation_signals(int signal) {
                     setAcknowledge();
                     status = Es_Running;
                     newDay();
-                    break;                
+                    break;        
                 default:
-                    handleErrorId("Recived not handled status", boat->id);
+                    snprintf(buffer, sizeof(buffer), "Recived not handled status %d", status);
+                    handleErrorId(buffer, boat->id);
                     break;
             }
             break;
@@ -86,6 +95,7 @@ void handle_boat_simulation_signals(int signal) {
             break;
 
         case SIGPWR: /* Malestorm */
+            debugId("Sunk by a malestrom", boat->id);
             handleMalestorm();
             simulationFinished = 1; /* For the nanosleep */
             status = Es_Finish_Simulation;
@@ -314,14 +324,9 @@ int handleStorm() {
 
 void handleMalestorm() {
 
-    /* Block all incoming signals after the first SIGINT */
-    sigset_t mask;
-    sigfillset(&mask);
-    sigprocmask(SIG_BLOCK, &mask, NULL);
-
+    setStatus(Sunk);
     dumpData();
 
-    setStatus(Sunk);
     acknowledgeInitArr[boat->id] = -1;
     acknowledgeDumpArr[boat->id] = -1;
 }
