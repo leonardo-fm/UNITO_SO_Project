@@ -278,14 +278,15 @@ int waitForAnalizerToCollectData() {
     return 0;
 }
 
-int acknowledgeChildrenStatus(int checkAnalyzerSatus) {
+int acknowledgeChildrenStatus(int checkAll) {
 
     double waitTimeInSeconds = 0.005;
     int allChildrenInit, i;
     int entities = configArr[SO_NAVI] + configArr[SO_PORTI];
 
-    if (checkAnalyzerSatus == 1) {
-        entities++;
+    if (checkAll == 1) {
+        entities++; /* Analyzer */
+        entities++; /* Weather */
     }
 
     do
@@ -321,8 +322,10 @@ int acknowledgeChildrenStatus(int checkAnalyzerSatus) {
                     entety = "P";
                 } else if (i >= configArr[SO_PORTI] && i < (configArr[SO_PORTI] + configArr[SO_NAVI])) {
                     entety = "B";
-                } else {
+                } else if (i == configArr[SO_PORTI] + configArr[SO_NAVI]) {
                     entety = "A";
+                } else {
+                    entety = "W";
                 }
 
                 snprintf(buffer, sizeof(buffer), "(%s) AcknowledgeInitArr[%d] = %d", entety, i, acknowledgeInitArr[i]);
@@ -406,7 +409,11 @@ int work() {
         char buffer[128];
         int currentHour = 0;
 
+#ifdef DEBUG
+        snprintf(buffer, sizeof(buffer), "||| ------------------- Day number %d ------------------- |||", simulationDays);
+#else
         snprintf(buffer, sizeof(buffer), "Day number %d", simulationDays);
+#endif
         printConsole(buffer);
 
         simulationDays++;
@@ -486,7 +493,11 @@ int work() {
         }
     }
 
-    printConsole("Simulation finished");
+#ifdef DEBUG
+        printConsole("||| ------------------- Simulation finished ------------------- |||");
+#else
+        printConsole("Simulation finished");
+#endif
     
     if (acknowledgeChildrenStatus(1) == -1) {
         handleError("Error while waiting for children to finish");

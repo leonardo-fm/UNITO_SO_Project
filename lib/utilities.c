@@ -19,8 +19,6 @@ void initializeEnvironment() {
 
     int randomSeed = rand() % getpid();
     srand(randomSeed);
-
-    debugId("Random seed", randomSeed);
 }
 
 /* Generates coordinates given the dimensions of a plane. */

@@ -86,6 +86,7 @@ void handle_port_simulation_signals(int signal) {
             dumpData();
             status = Es_Finish_Simulation;
             stopWaitingQueues = 1;
+            simulationFinished = 1; /* For the nanosleep */
             break;
             
         default:

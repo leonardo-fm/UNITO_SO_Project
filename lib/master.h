@@ -1,6 +1,6 @@
 void initializeSingalsMask();
 int initializeSingalsHandlers();
-int acknowledgeChildrenStatus(int checkAnalyzerSatus);
+int acknowledgeChildrenStatus(int checkAll);
 int work();
 int generateSharedMemory(int sizeOfSegment);
 sem_t *generateSemaphore(int semKey);
