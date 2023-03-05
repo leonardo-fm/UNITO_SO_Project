@@ -352,7 +352,7 @@ int work() {
         }
         
         if (status != Es_Finish_Simulation) {
-
+            
             debugId("Setup trade", boat->id);
             if (setupTrade(currentPort) == -1) {
                 handleErrorId("Error during setup for the trade", boat->id);
@@ -469,7 +469,7 @@ int gotoPort() {
 
     /* Set the status to travellig */
     setStatus(boat->state == In_Sea ? In_Sea_Travelling : In_Sea_Empty_Travelling);
-
+    
     if (safeWait(waitTimeS, waitTimeNs) == -1) {
         handleErrorId("Error while waiting to go to in a port", boat->id);
         return -1;
@@ -543,7 +543,7 @@ int openTrade() {
     }
     
     setStatus(In_Port_Exchange);
-    
+
     if (trade() == -1) {
         handleErrorId("Error during trade", boat->id);
         return -1;
@@ -554,10 +554,8 @@ int openTrade() {
 
 int trade() {
 
-    printf("%d == 0 && %d != 6\n", haveIGoodsToSell(), status);
-
     if (haveIGoodsToSell() == 0 && status != Es_Finish_Simulation) {
-        printConsole("********** Try to sell");
+
         if (sellGoods() == -1) {
             handleErrorId("Error during selling goods", boat->id);
             return -1;
@@ -636,7 +634,6 @@ int haveIGoodsToSell() {
     int i = 0;
     int haveGoodToSell = 0;
     for (i = 0; i < configArr[SO_MERCI]; i++) {
-        printf("goodHold[%d].loadInTon = %d\n", i, goodHold[i].loadInTon);
         if (goodHold[i].loadInTon > 0 ) {
             haveGoodToSell = 1;
             break;
@@ -735,7 +732,7 @@ int sellGoods() {
             
             sem_wait(semaphore);
             currentSellingGood = i;
-printConsole("SELL");
+
             /* If x >= 0 OK, x < 0 not enought good to sell */
             if (goodArr[i].loadInTon - goodHold[i].loadInTon >= 0) {
                 exchange = goodHold[i].loadInTon;
@@ -775,10 +772,6 @@ printConsole("SELL");
                 handleErrorId("Failed to send PA_SE_SUMMARY comunication", boat->id);
                 return -1;
             }
-        } else {
-            /*goodHold[i].loadInTon > 0 && goodHold[i].state != Expired_In_The_Boat && boat->state == In_Port_Exchange*/
-            printf("%d > 0 && %d != 5 && %d == 4", goodHold[i].loadInTon, goodHold[i].state, boat->state);
-            printConsole(".");
         }
     }
 
@@ -856,6 +849,8 @@ int buyGoods() {
 
     /* Buy some available goods */
     availableSpace = floor((double) getSpaceAvailableInTheHold() / configArr[SO_MERCI]);
+    additionalGoods = 0;
+
     for (i = 0; i < configArr[SO_MERCI]; i++) {
         if (goodArr[i].loadInTon > 0 && goodArr[i].state != Expired_In_The_Port && boat->state == In_Port_Exchange) {
             

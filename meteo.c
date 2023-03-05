@@ -26,7 +26,7 @@ const int HOUR_IN_DAY = 24;
 
 int *configArr = 0;
 
-int *acknowledgeInitArr = 0; /* TODO gesrie init di meteo */
+int *acknowledgeInitArr = 0;
 
 Boat *boatArr = 0;
 Port *portArr = 0;
@@ -179,7 +179,7 @@ int work() {
             return -1;
         }
 
-        /* Activate storm and swell *//*
+        /* Activate storm and swell */
         if (passedHours % HOUR_IN_DAY == 0) {
             
             if (activateSwell() == -1) {
@@ -199,7 +199,7 @@ int work() {
                 handleError("Failed activating malestorm");
                 return -1;
             }
-        }*/
+        }
 
         passedHours++;
     }
