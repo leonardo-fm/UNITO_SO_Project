@@ -311,7 +311,7 @@ int initializePortStruct(char *portIdString, char *portSharedMemoryIdS) {
 
 int initializeExchangeGoods() {
 
-    int maxRequest, i;
+    int i;
 
     /* Generate shared memory for good stock */
     goodStockSharedMemoryId = generateSharedMemory(sizeof(Goods) * configArr[SO_MERCI]);
@@ -351,19 +351,18 @@ int initializeExchangeGoods() {
         return -1;
     }
 
-    maxRequest = (configArr[SO_FILL] / 2) / configArr[SO_MERCI] / configArr[SO_PORTI];
     for (i = 0; i < configArr[SO_MERCI]; i++) {
 
         Goods goodInStock, goodRequested;
 
         goodInStock.id = i;
-        goodInStock.loadInTon = 0;
+        goodInStock.goodLots = 0;
         goodInStock.state = In_The_Port;
 
         goodStockArr[i] = goodInStock;
 
         goodRequested.id = i;
-        goodRequested.loadInTon = maxRequest;
+        goodRequested.goodLots = 0;
         goodRequested.state = In_The_Port;
 
         goodRequestArr[i] = goodRequested;
@@ -383,18 +382,18 @@ int initializePortGoods() {
         if (stockOrRequest == 0) {
             /* Fill stock */
             goodStockArr[i].remaningDays = goodMasterArr[i].remaningDays;
-            goodStockArr[i].loadInTon = goodMasterArr[i].loadInTon;
-            goodRequestArr[i].loadInTon = 0;
+            goodStockArr[i].goodLots = goodMasterArr[i].goodLots;
+            goodRequestArr[i].goodLots = 0;
             goodStockArr[i].state = In_The_Port;
             
             sem_wait(endGoodDumpSemaphore);
-            endGoodDumpArr[i].totalInitNumber += goodStockArr[i].loadInTon;
+            endGoodDumpArr[i].totalLotInitNumber += goodStockArr[i].goodLots;
             sem_post(endGoodDumpSemaphore);
         } else {
             /* Fill request */
             goodRequestArr[i].remaningDays = goodMasterArr[i].remaningDays;
-            goodRequestArr[i].loadInTon = goodMasterArr[i].loadInTon;
-            goodStockArr[i].loadInTon = 0;
+            goodRequestArr[i].goodLots = goodMasterArr[i].goodLots;
+            goodStockArr[i].goodLots = 0;
             goodRequestArr[i].state = In_The_Port;
         }
 
@@ -580,7 +579,7 @@ int work() {
     /* End good dump */
     for (i = 0; i < configArr[SO_MERCI]; i++) {
         sem_wait(endGoodDumpSemaphore);
-        endGoodDumpArr[i].inPort += goodStockArr[i].loadInTon;
+        endGoodDumpArr[i].inPort += goodStockArr[i].goodLots;
         sem_post(endGoodDumpSemaphore);
     }
 
@@ -631,10 +630,10 @@ int dumpData() {
     totalDailyGoodsRecived = 0;
     for (i = 0; i < configArr[SO_MERCI]; i++) {
         if(goodStockArr[i].state != Expired_In_The_Port) {
-            totalGoodInStock += goodStockArr[i].loadInTon;
+            totalGoodInStock += goodStockArr[i].goodLots;
         }
         if(goodRequestArr[i].state != Expired_In_The_Port) {
-            totalGoodRequested += goodRequestArr[i].loadInTon;
+            totalGoodRequested += goodRequestArr[i].goodLots;
         }
         
         totalDailyGoodsSold += goodStockArr[i].dailyExchange;        
@@ -647,15 +646,15 @@ int dumpData() {
         
         gdd.goodId = i;
         if (goodStockArr[i].state == Expired_In_The_Port) {
-            gdd.Good_Expired_In_The_Port = goodStockArr[i].loadInTon;
+            gdd.Good_Expired_In_The_Port = goodStockArr[i].goodLots;
             
-            goodStockArr[i].loadInTon = 0;
+            goodStockArr[i].goodLots = 0;
             goodStockArr[i].state = Undefined;
         } else {
             gdd.Good_Expired_In_The_Port = 0;
         }
 
-        gdd.Good_In_The_Port = goodStockArr[i].loadInTon;
+        gdd.Good_In_The_Port = goodStockArr[i].goodLots;
         gdd.Good_Delivered = goodRequestArr[i].dailyExchange;
 
         gdd.Good_Expired_In_The_Boat = 0;
@@ -709,7 +708,7 @@ int newDay() {
                     goodStockArr[i].state = Expired_In_The_Port;
 
                     sem_wait(endGoodDumpSemaphore);
-                    endGoodDumpArr[i].expiredInPort += goodStockArr[i].loadInTon;
+                    endGoodDumpArr[i].expiredInPort += goodStockArr[i].goodLots;
                     sem_post(endGoodDumpSemaphore);
                 }
             }

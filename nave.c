@@ -280,9 +280,8 @@ int initializeBoat(char *boatIdS, char *portSharedMemoryIdS, char *boatSharedMem
 
     boatArr[referenceId].id = strtol(boatIdS, &p, 10);
     boatArr[referenceId].pid = getpid();
+    boatArr[referenceId].capacityInLot = floor(configArr[S0_CAPACITY] / configArr[SO_SIZE]);
     boatArr[referenceId].position = getRandomCoordinates(configArr[SO_LATO], configArr[SO_LATO]);
-    boatArr[referenceId].capacityInTon = configArr[S0_CAPACITY];
-    boatArr[referenceId].speed = configArr[SO_SPEED];
     boatArr[referenceId].state = In_Sea_Empty;
 
     boat = &boatArr[referenceId];
@@ -297,7 +296,7 @@ int initializeBoat(char *boatIdS, char *portSharedMemoryIdS, char *boatSharedMem
     for (i = 0; i < configArr[SO_MERCI]; i++) {
         Goods emptyGood;
         emptyGood.id = i;
-        emptyGood.loadInTon = 0;
+        emptyGood.goodLots = 0;
         emptyGood.state = Undefined;
         emptyGood.remaningDays = 0;
 
@@ -391,14 +390,14 @@ int dumpData() {
 
         gdd.goodId = i;
         if (goodHold[i].state == Expired_In_The_Boat) {
-            gdd.Good_Expired_In_The_Boat = goodHold[i].loadInTon;
+            gdd.Good_Expired_In_The_Boat = goodHold[i].goodLots;
             
-            goodHold[i].loadInTon = 0;
+            goodHold[i].goodLots = 0;
             goodHold[i].state = Undefined;
         } else {
             gdd.Good_Expired_In_The_Boat = 0;
         }
-        gdd.Good_In_The_Boat = goodHold[i].loadInTon;
+        gdd.Good_In_The_Boat = goodHold[i].goodLots;
 
         gdd.Good_Delivered = 0;
         gdd.Good_Expired_In_The_Port = 0;
@@ -434,7 +433,7 @@ int newDay() {
                 goodHold[i].state = Expired_In_The_Boat;
 
                 sem_wait(endGoodDumpSemaphore);
-                endGoodDumpArr[i].expiredInBoat += goodHold[i].loadInTon;
+                endGoodDumpArr[i].expiredInBoat += goodHold[i].goodLots;
                 sem_post(endGoodDumpSemaphore);
             }
         }
@@ -527,6 +526,7 @@ int openTrade() {
     
     if (response.msg.data.action == PA_N) {
 
+        debugId("Trade request rejected", boat->id);
         if (msgctl(readingMsgQueue, IPC_RMID, NULL) == -1) {
             handleErrnoId("msgctl()", boat->id);
             return -1;
@@ -555,7 +555,8 @@ int openTrade() {
 int trade() {
 
     if (haveIGoodsToSell() == 0 && status != Es_Finish_Simulation) {
-
+        
+        debugId("Start sell", boat->id);
         if (sellGoods() == -1) {
             handleErrorId("Error during selling goods", boat->id);
             return -1;
@@ -564,6 +565,7 @@ int trade() {
 
     if (haveIGoodsToBuy() == 0 && status != Es_Finish_Simulation) {
 
+        debugId("Start buy", boat->id);
         if (buyGoods() == -1) {
             handleErrorId("Error during buying goods", boat->id);
             return -1;
@@ -634,7 +636,7 @@ int haveIGoodsToSell() {
     int i = 0;
     int haveGoodToSell = 0;
     for (i = 0; i < configArr[SO_MERCI]; i++) {
-        if (goodHold[i].loadInTon > 0 ) {
+        if (goodHold[i].goodLots > 0 ) {
             haveGoodToSell = 1;
             break;
         }    
@@ -647,12 +649,12 @@ int haveIGoodsToSell() {
 int haveIGoodsToBuy() {
     
     int i = 0;
-    int totalNumOfTons = 0;
+    int totalNumOfLots = 0;
     for (i = 0; i < configArr[SO_MERCI]; i++) {
-        totalNumOfTons += goodHold[i].loadInTon;   
+        totalNumOfLots += goodHold[i].goodLots;   
     }
 
-    if (totalNumOfTons < boat->capacityInTon) {
+    if (boat->capacityInLot > totalNumOfLots) {
         return 0;
     } else {
         return -1;
@@ -720,13 +722,13 @@ int sellGoods() {
 
     /* Sell all available goods */
     for (i = 0; i < configArr[SO_MERCI]; i++) {
-        if (goodHold[i].loadInTon > 0 && goodHold[i].state != Expired_In_The_Boat && boat->state == In_Port_Exchange) {
+        if (goodHold[i].goodLots > 0 && goodHold[i].state != Expired_In_The_Boat && boat->state == In_Port_Exchange) {
 
             int exchange = 0;
             double loadTonPerDay;
             long waitTimeS, waitTimeNs;
 
-            if (goodArr[i].loadInTon == 0) {
+            if (goodArr[i].goodLots == 0) {
                 continue;
             }
             
@@ -734,24 +736,24 @@ int sellGoods() {
             currentSellingGood = i;
 
             /* If x >= 0 OK, x < 0 not enought good to sell */
-            if (goodArr[i].loadInTon - goodHold[i].loadInTon >= 0) {
-                exchange = goodHold[i].loadInTon;
-                goodArr[i].loadInTon -= goodHold[i].loadInTon;
-                goodHold[i].loadInTon = 0;
+            if (goodArr[i].goodLots - goodHold[i].goodLots >= 0) {
+                exchange = goodHold[i].goodLots;
+                goodArr[i].goodLots -= goodHold[i].goodLots;
+                goodHold[i].goodLots = 0;
                 goodHold[i].remaningDays = 0;
             } else {
-                exchange = goodHold[i].loadInTon - goodArr[i].loadInTon;
-                goodArr[i].loadInTon = 0;
-                goodHold[i].loadInTon -= exchange;
+                exchange = goodHold[i].goodLots - goodArr[i].goodLots;
+                goodArr[i].goodLots = 0;
+                goodHold[i].goodLots -= exchange;
             }
 
             /* Set good state for boat */
-            if (goodHold[i].loadInTon == 0) {
+            if (goodHold[i].goodLots == 0) {
                 goodHold[i].state = Undefined;
             }
 
             /* Set good state for port */
-            if (goodArr[i].loadInTon > 0) {
+            if (goodArr[i].goodLots > 0) {
                 goodArr[i].state = In_The_Port;
             }
 
@@ -790,7 +792,7 @@ int sellGoods() {
 
 int buyGoods() {
 
-    int waitResponse, i, availableSpace, additionalGoods;
+    int waitResponse, i, lotsPerGood, spareLots, additionalLots;
     PortMessage response;
     
     char semaphoreKey[12];
@@ -848,50 +850,54 @@ int buyGoods() {
     }
 
     /* Buy some available goods */
-    availableSpace = floor((double) getSpaceAvailableInTheHold() / configArr[SO_MERCI]);
-    additionalGoods = 0;
+    lotsPerGood = floor(getSpaceAvailableInTheHold() / configArr[SO_MERCI]);
+    spareLots = getSpaceAvailableInTheHold() % configArr[SO_MERCI];
+    additionalLots = 0;
 
     for (i = 0; i < configArr[SO_MERCI]; i++) {
-        if (goodArr[i].loadInTon > 0 && goodArr[i].state != Expired_In_The_Port && boat->state == In_Port_Exchange) {
+        if (goodArr[i].goodLots > 0 && goodArr[i].state != Expired_In_The_Port && boat->state == In_Port_Exchange) {
             
             int exchange;
             double loadTonPerDay;
             long waitTimeS, waitTimeNs;
-            int currentAvailableSpace = availableSpace + additionalGoods;
+            int currentAvailableSpace = lotsPerGood + additionalLots;
+            if (spareLots-- > 0) {
+                currentAvailableSpace++;
+            }
 
             sem_wait(semaphore);
 
             exchange = 0;
-            additionalGoods = 0;
+            additionalLots = 0;
 
             /* If x >= 0 OK, x < 0 not enought good to buy */
-            if (goodArr[i].loadInTon - currentAvailableSpace >= 0) {
+            if (goodArr[i].goodLots - currentAvailableSpace >= 0) {
                 exchange = currentAvailableSpace;
-                goodArr[i].loadInTon -= currentAvailableSpace;
-                goodHold[i].loadInTon += currentAvailableSpace;
+                goodArr[i].goodLots -= currentAvailableSpace;
+                goodHold[i].goodLots += currentAvailableSpace;
             } else {
-                exchange = goodArr[i].loadInTon;
-                goodArr[i].loadInTon = 0;
-                goodHold[i].loadInTon += exchange;
-                additionalGoods += currentAvailableSpace - exchange;
+                exchange = goodArr[i].goodLots;
+                goodArr[i].goodLots = 0;
+                goodHold[i].goodLots += exchange;
+                additionalLots += currentAvailableSpace - exchange;
             }
 
             /* Set expire date */
             goodHold[i].remaningDays = goodArr[i].remaningDays;
 
             /* Set good state for boat */
-            if (goodHold[i].loadInTon > 0) {
+            if (goodHold[i].goodLots > 0) {
                 goodHold[i].state = In_The_Boat;
             }
 
             /* Set good state for port */
-            if (goodArr[i].loadInTon == 0) {
+            if (goodArr[i].goodLots == 0) {
                 goodArr[i].state = Undefined;
             }
 
             sem_post(semaphore);
 
-            loadTonPerDay = (double) exchange / configArr[SO_LOADSPEED];
+            loadTonPerDay = (double)(exchange * configArr[SO_SIZE]) / configArr[SO_LOADSPEED];
             waitTimeNs = getNanoSeconds(loadTonPerDay);
             waitTimeS = getSeconds(loadTonPerDay);
 
@@ -910,7 +916,10 @@ int buyGoods() {
                 break;
             }
         } else {
-            additionalGoods += availableSpace;
+            additionalLots += lotsPerGood;
+            if (spareLots-- > 0) {
+                additionalLots++;
+            }
         }
     }
 
@@ -931,12 +940,12 @@ int buyGoods() {
 int getSpaceAvailableInTheHold() {
 
     int i = 0;
-    int totalNumOfTons = 0;
+    int totalNumOfLots = 0;
     for (i = 0; i < configArr[SO_MERCI]; i++) {
-        totalNumOfTons += goodHold[i].loadInTon;   
+        totalNumOfLots += goodHold[i].goodLots;   
     }
 
-    return boat->capacityInTon - totalNumOfTons;
+    return boat->capacityInLot - totalNumOfLots;
 }
 
 void setAcknowledge() {

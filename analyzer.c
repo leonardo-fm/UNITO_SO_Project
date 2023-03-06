@@ -597,7 +597,7 @@ int generateEndGoodReport() {
     /* Print data */
     fprintf(filePointer, "%-12s%-12s%-12s%-12s%-12s%-12s\n", "GOOD_ID", "INIT_TOTAL", "IN_PORT", "E_IN_PORT", "E_IN_BOAT", "EXCHANGED");
     for (i = 0; i < configArr[SO_MERCI]; i++) {
-        fprintf(filePointer, "%-12d%-12d%-12d%-12d%-12d%-12d\n", i, endGoodArr[i].totalInitNumber, endGoodArr[i].inPort,
+        fprintf(filePointer, "%-12d%-12d%-12d%-12d%-12d%-12d\n", i, endGoodArr[i].totalLotInitNumber, endGoodArr[i].inPort,
             endGoodArr[i].expiredInPort, endGoodArr[i].expiredInBoat, endGoodArr[i].exchanged);
     }
     fprintf(filePointer, "\n");
@@ -622,8 +622,8 @@ int generateEndPortStat() {
         }
     }
 
-    fprintf(filePointer, "The port %d have sold %d ton of goods\n", portIdSold, totSold);
-    fprintf(filePointer, "The port %d have requested %d ton of goods\n", portIdReq, totReq);
+    fprintf(filePointer, "The port %d have sold %d lot of goods\n", portIdSold, totSold);
+    fprintf(filePointer, "The port %d have requested %d lot of goods\n", portIdReq, totReq);
 
     return 0;
 }

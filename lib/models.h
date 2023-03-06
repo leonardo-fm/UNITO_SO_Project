@@ -48,7 +48,7 @@ typedef enum {
 
 typedef struct {
     int id;
-    int loadInTon;
+    int goodLots;
     int remaningDays;
     int dailyExchange;
     GoodsState state;
@@ -69,8 +69,7 @@ typedef enum {
 typedef struct {
     int id;
     int pid;
-    int speed;
-    int capacityInTon;
+    int capacityInLot;
     int storm;
     Coordinates position;
     BoatState state;
@@ -126,7 +125,7 @@ typedef struct {
 } portDailyDump;
 
 typedef struct {
-    int totalInitNumber;
+    int totalLotInitNumber;
     int inPort;
     int expiredInPort;
     int expiredInBoat;

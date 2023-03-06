@@ -624,7 +624,7 @@ int generateSubProcesses(int nOfProcess, char *execFilePath, int includeProcedur
 int generateGoods(int firstGenerations) {
 
     int *randomGoodDistribution;
-    int i, goodPerDay;
+    int i, lotPerDay;
 
     Goods *arr = (Goods*) shmat(goodSharedMemoryId, NULL, 0);
     if (arr == (void*) -1) {
@@ -633,9 +633,9 @@ int generateGoods(int firstGenerations) {
     }
 
     randomGoodDistribution = (int *) malloc(sizeof(int) * configArr[SO_MERCI]);
-    goodPerDay = configArr[SO_FILL] / configArr[SO_DAYS];
+    lotPerDay = configArr[SO_FILL] / configArr[SO_SIZE] / configArr[SO_DAYS];
     /* TODO attualemente anche se una merce scade noi andiamo ad assegnarle un valore che ovviamente non verrà mai usato */
-    generateSubgroupSums(randomGoodDistribution, goodPerDay, configArr[SO_MERCI]);
+    generateSubgroupSums(randomGoodDistribution, lotPerDay, configArr[SO_MERCI]);
 
     for (i = 0; i < configArr[SO_MERCI]; i++) {
         
@@ -645,7 +645,7 @@ int generateGoods(int firstGenerations) {
 
             good.id = i;
             /* I got the amount of each port must have */
-            good.loadInTon = randomGoodDistribution[i] / configArr[SO_PORTI];
+            good.goodLots = randomGoodDistribution[i] / configArr[SO_PORTI];
             good.state = Undefined;
             good.remaningDays = getRandomValue(configArr[SO_MIN_VITA], configArr[SO_MAX_VITA]);
         } else {
@@ -654,11 +654,11 @@ int generateGoods(int firstGenerations) {
             
             if (good.remaningDays > 0) {
             
-                good.loadInTon = randomGoodDistribution[i] / configArr[SO_PORTI];
+                good.goodLots = randomGoodDistribution[i] / configArr[SO_PORTI];
                 good.remaningDays--;
             } else {
             
-                good.loadInTon = 0;
+                good.goodLots = 0;
             }
         }
 

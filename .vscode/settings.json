@@ -16,6 +16,7 @@
         "utilities.h": "c",
         "nave.h": "c",
         "custommacro.h": "c",
-        "string.h": "c"
+        "string.h": "c",
+        "porto.h": "c"
     }
 }
