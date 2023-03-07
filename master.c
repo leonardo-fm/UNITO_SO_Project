@@ -10,6 +10,8 @@
 #include <sys/shm.h>    
 #include <signal.h> 
 #include <sys/msg.h>
+#include <math.h>
+#include <sys/time.h>
 
 #include "lib/config.h"
 #include "lib/utilities.h"
@@ -24,9 +26,13 @@ int NUM_OF_SETTINGS = 16;
 int *configArr = 0;
 
 int configSharedMemoryId = 0;
-int goodSharedMemoryId = 0;
 int portSharedMemoryId = 0;
 int boatSharedMemoryId = 0;
+
+int goodSharedMemoryId = 0;
+int *dailyLotDistributionArr = 0;
+InitGoods *initGoodArr = 0;
+sem_t *initGoodSemaphore = 0;
 
 int goodAnalyzerSharedMemoryId;
 int boatAnalyzerSharedMemoryId;
@@ -134,6 +140,7 @@ int main() {
         safeExit(18);
     }
 
+    debug("Start creating the analyzer...");
     analyzerArgs[0] = configSharedMemoryId;
     analyzerArgs[1] = goodAnalyzerSharedMemoryId;
     analyzerArgs[2] = boatAnalyzerSharedMemoryId;
@@ -154,7 +161,21 @@ int main() {
         safeExit(8);
     }
 
-    if (generateGoods(1) == -1) {
+    initGoodArr = (InitGoods*) shmat(goodSharedMemoryId, NULL, 0);
+    if (initGoodArr == (void*) -1) {
+        handleErrno("shmat()");
+        safeExit(23);
+    }
+
+    if (generateSemaphore(goodSharedMemoryId) == (void*) -1) {
+        handleError("Error during creation of semaphore for goods");
+        safeExit(18);
+    }
+
+    dailyLotDistributionArr = (int*) malloc(sizeof(int) * configArr[SO_DAYS]);
+    generateSubgroupSums(dailyLotDistributionArr, floor((double)configArr[SO_FILL] / configArr[SO_SIZE]), configArr[SO_DAYS]);
+
+    if (generateGoods(0) == -1) {
         safeExit(9);
     }
 
@@ -165,6 +186,7 @@ int main() {
         safeExit(11);
     }
 
+    debug("Start creating the ports...");
     portArgs[0] = configSharedMemoryId;
     portArgs[1] = portSharedMemoryId;
     portArgs[2] = goodSharedMemoryId;
@@ -184,6 +206,7 @@ int main() {
         safeExit(20);
     }
 
+    debug("Start creating the boats...");
     boatArgs[0] = configSharedMemoryId;
     boatArgs[1] = portSharedMemoryId;
     boatArgs[2] = goodAnalyzerSharedMemoryId;
@@ -198,6 +221,7 @@ int main() {
 
 
     /* ----- WEATHER ----- */
+    debug("Start creating the weather...");
     weatherArgs[0] = configSharedMemoryId;
     weatherArgs[1] = boatSharedMemoryId;
     weatherArgs[2] = portSharedMemoryId;
@@ -243,7 +267,7 @@ int checkForAnalizerToFinish() {
         case PA_FINISH:
             break;
         case PA_EOS_GSR:
-            printConsole("No more request or in stock of goods");
+            printConsole("No more good requested or in stock");
             simulationFinishedEarly = 1;
             return checkForAnalizerToFinish();
             break;
@@ -410,6 +434,13 @@ int work() {
         int currentHour = 0;
 
 #ifdef DEBUG
+        struct timeval startTime, finishTime;
+        double elapsedTimeInMs;
+
+        gettimeofday(&startTime, NULL);
+#endif
+
+#ifdef DEBUG
         snprintf(buffer, sizeof(buffer), "||| ------------------- Day number %d ------------------- |||", simulationDays);
 #else
         snprintf(buffer, sizeof(buffer), "Starting day %d", simulationDays);
@@ -466,7 +497,7 @@ int work() {
             waitForAnalizerToCollectData();
 
             /* Generate new goods */
-            if (generateGoods(0) == -1) {
+            if (generateGoods(simulationDays) == -1) {
                 handleError("Error while generating goods");
                 return -1;
             }
@@ -481,6 +512,16 @@ int work() {
                 return -1;
             }
         }
+
+#ifdef DEBUG
+        gettimeofday(&finishTime, NULL);
+
+        elapsedTimeInMs = (finishTime.tv_sec - startTime.tv_sec) * 1000.0;
+        elapsedTimeInMs += (finishTime.tv_usec - startTime.tv_usec) / 1000.0;
+        
+        snprintf(buffer, sizeof(buffer), "Day: %d finish in %f ms", simulationDays, elapsedTimeInMs);
+        debug(buffer);
+#endif
     }
 
     killpg(getpid(), SIGUSR2);
@@ -621,61 +662,87 @@ int generateSubProcesses(int nOfProcess, char *execFilePath, int includeProcedur
 }
 
 /* Generate all the goods requested and initialize them */
-int generateGoods(int firstGenerations) {
+int generateGoods(int dayOfSimulation) {
 
     int *randomGoodDistribution;
-    int i, lotPerDay;
+    int randomPortNumber = getRandomValue(1, configArr[SO_PORTI]);
+    int i;
 
-    Goods *arr = (Goods*) shmat(goodSharedMemoryId, NULL, 0);
-    if (arr == (void*) -1) {
-        handleErrno("shmat");
-        return -1;
-    }
+    randomGoodDistribution = (int*) malloc(sizeof(int) * configArr[SO_MERCI]);
+    memset(randomGoodDistribution, 0, sizeof(int) * configArr[SO_MERCI]);
 
-    randomGoodDistribution = (int *) malloc(sizeof(int) * configArr[SO_MERCI]);
-    lotPerDay = configArr[SO_FILL] / configArr[SO_SIZE] / configArr[SO_DAYS];
     /* TODO attualemente anche se una merce scade noi andiamo ad assegnarle un valore che ovviamente non verrà mai usato */
-    generateSubgroupSums(randomGoodDistribution, lotPerDay, configArr[SO_MERCI]);
+    generateSubgroupSums(randomGoodDistribution, dailyLotDistributionArr[dayOfSimulation], configArr[SO_MERCI]);
 
     for (i = 0; i < configArr[SO_MERCI]; i++) {
         
-        Goods good;
+        InitGoods initGood;
+        int lotsToSet = randomGoodDistribution[i];
         
-        if (firstGenerations) {
+        /* Check first initialization */
+        if (dayOfSimulation == 0) {
 
-            good.id = i;
-            /* I got the amount of each port must have */
-            good.goodLots = randomGoodDistribution[i] / configArr[SO_PORTI];
-            good.state = Undefined;
-            good.remaningDays = getRandomValue(configArr[SO_MIN_VITA], configArr[SO_MAX_VITA]);
+            initGood.good.id = i;
+            initGood.good.goodLots = lotsToSet;
+            initGood.good.state = Undefined;
+            initGood.good.remaningDays = getRandomValue(configArr[SO_MIN_VITA], configArr[SO_MAX_VITA]);
+
+            initGood.spareLot = floor((double)lotsToSet / configArr[SO_PORTI]) + 1;
+            initGood.spareLotAmmount = lotsToSet % configArr[SO_PORTI];
+            initGood.defaultLot = floor((double)lotsToSet / configArr[SO_PORTI]);
+            initGood.defaultLotAmmount = configArr[SO_PORTI] - (lotsToSet % configArr[SO_PORTI]);
         } else {
-
-            good = arr[i];
             
-            if (good.remaningDays > 0) {
+            initGood.good = initGoodArr[i].good;
             
-                good.goodLots = randomGoodDistribution[i] / configArr[SO_PORTI];
-                good.remaningDays--;
+            if (initGood.good.remaningDays > 0) {
+            
+                initGood.good.goodLots = lotsToSet;
+                initGood.good.remaningDays--;
+                
+                initGood.spareLot = floor((double) lotsToSet / randomPortNumber) + 1;
+                initGood.spareLotAmmount = lotsToSet % randomPortNumber;
+                initGood.defaultLot = floor((double)lotsToSet / randomPortNumber);
+                initGood.defaultLotAmmount = randomPortNumber - (lotsToSet % randomPortNumber);
             } else {
             
-                good.goodLots = 0;
+                initGood.good.goodLots = 0;
+
+                initGood.spareLot = 0;
+                initGood.spareLotAmmount = 0;
+                initGood.defaultLot = 0;
+                initGood.defaultLotAmmount = 0;
             }
         }
 
-        arr[i] = good;
-    }
-
-    if (shmdt(arr) == -1) {
-        handleErrno("shmdt()");
-        return -1;
+        initGoodArr[i] = initGood;
     }
 
     free(randomGoodDistribution);
+
+#ifdef DEBUG
+    if (1 == 1) {
+        char buffer[128];
+        int totalLotsDistributed = 0;
+
+        for (i = 0; i < configArr[SO_MERCI]; i++)
+        {
+            snprintf(buffer, sizeof(buffer), "Good %d: %d ammount d: %d s: %d", i, initGoodArr[i].good.goodLots, initGoodArr[i].defaultLotAmmount, initGoodArr[i].spareLotAmmount);
+            debug(buffer);
+            totalLotsDistributed += initGoodArr[i].good.goodLots;
+        }
+
+        snprintf(buffer, sizeof(buffer), "Lots distributed: %d/%d for %d", totalLotsDistributed, dailyLotDistributionArr[dayOfSimulation], randomPortNumber);
+        debug(buffer);
+    }
+#endif
 
     return 0;
 }
 
 int cleanup() {
+
+    free(dailyLotDistributionArr);
 
     if (configArr != 0 && shmdt(configArr) == -1) {
         handleErrno("shmdt()");
@@ -687,8 +754,18 @@ int cleanup() {
         return -1;
     }
 
+    if (initGoodArr != 0 && shmdt(initGoodArr) == -1) {
+        handleErrno("shmdt()");
+        return -1;
+    }
+
     if (goodSharedMemoryId != 0 && shmctl(goodSharedMemoryId, IPC_RMID, NULL) == -1) {
         handleErrno("shmctl()");
+        return -1;
+    }
+
+    if (initGoodSemaphore != 0 && sem_close(initGoodSemaphore) == -1) {
+        handleErrno("sem_close()");
         return -1;
     }
     

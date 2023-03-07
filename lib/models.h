@@ -1,8 +1,8 @@
 /* OTHER */
 
 typedef struct {
-    int x;
-    int y;
+    double x;
+    double y;
 } Coordinates;
 
 typedef enum {
@@ -53,6 +53,14 @@ typedef struct {
     int dailyExchange;
     GoodsState state;
 } Goods;
+
+typedef struct {
+    int spareLot; /* Lots with spare lot */
+    int spareLotAmmount;
+    int defaultLot; /* Lots without spare lot */
+    int defaultLotAmmount;
+    Goods good;
+} InitGoods;
 
 
 /* BOAT */

@@ -280,7 +280,7 @@ int initializeBoat(char *boatIdS, char *portSharedMemoryIdS, char *boatSharedMem
 
     boatArr[referenceId].id = strtol(boatIdS, &p, 10);
     boatArr[referenceId].pid = getpid();
-    boatArr[referenceId].capacityInLot = floor(configArr[S0_CAPACITY] / configArr[SO_SIZE]);
+    boatArr[referenceId].capacityInLot = floor((double)configArr[S0_CAPACITY] / configArr[SO_SIZE]);
     boatArr[referenceId].position = getRandomCoordinates(configArr[SO_LATO], configArr[SO_LATO]);
     boatArr[referenceId].state = In_Sea_Empty;
 
@@ -850,7 +850,7 @@ int buyGoods() {
     }
 
     /* Buy some available goods */
-    lotsPerGood = floor(getSpaceAvailableInTheHold() / configArr[SO_MERCI]);
+    lotsPerGood = floor((double)getSpaceAvailableInTheHold() / configArr[SO_MERCI]);
     spareLots = getSpaceAvailableInTheHold() % configArr[SO_MERCI];
     additionalLots = 0;
 

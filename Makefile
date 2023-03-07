@@ -15,7 +15,7 @@ run: build
 build: master nave porto analyzer meteo
 
 master: master.c
-	gcc $(CFLAGS) $(SFLAGS) -o bin/master master.c $(LFLAGS) -pthread
+	gcc $(CFLAGS) $(SFLAGS) -o bin/master master.c $(LFLAGS) -lm -pthread
 
 nave: nave.c
 	gcc $(CFLAGS) $(SFLAGS) -o bin/nave nave.c $(LFLAGS) -lm -pthread
@@ -38,7 +38,7 @@ debug: build-debug
 build-debug: master_d nave_d porto_d analyzer_d meteo_d
 
 master_d: master.c
-	gcc $(CFLAGS) $(CDFLAGS) $(SFLAGS) -o bin/master master.c $(LFLAGS) -pthread
+	gcc $(CFLAGS) $(CDFLAGS) $(SFLAGS) -o bin/master master.c $(LFLAGS) -lm -pthread
 
 nave_d: nave.c
 	gcc $(CFLAGS) $(CDFLAGS) $(SFLAGS) -o bin/nave nave.c $(LFLAGS) -lm -pthread

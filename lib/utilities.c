@@ -17,7 +17,7 @@ struct timespec addingTime;
 /* Initialize some values for the program to work */
 void initializeEnvironment() {
 
-    int randomSeed = rand() % getpid();
+    int randomSeed = (rand() + (int)time(NULL)) % getpid();
     srand(randomSeed);
 }
 
@@ -27,8 +27,8 @@ void initializeEnvironment() {
 Coordinates getRandomCoordinates(int maxX, int maxY) {
 
     Coordinates coordinates;
-    coordinates.x = rand() / (RAND_MAX / maxX);
-    coordinates.y = rand() / (RAND_MAX / maxY);
+    coordinates.x = (double)rand() / (RAND_MAX / maxX);
+    coordinates.y = (double)rand() / (RAND_MAX / maxY);
     return coordinates;
 }
 
@@ -71,19 +71,28 @@ int getRandomValue(int min, int max) {
     return randomValue;
 }
 
-void generateSubgroupSums(int *arr, int totalNumber, int subgroups) {
+void generateSubgroupSums(int *arr, int totalNumber, int subGroups) {
 
     int remaining, i;
     
     remaining = totalNumber;
-    for (i = 0; i < subgroups - 1; i++) {
-        int averageValue = remaining / (subgroups - i);
-        int randomAmmount = rand() % averageValue;
+    for (i = 0; i < subGroups - 1; i++) {
+        
+        int averageValue, randomAmmount;
+        
+        averageValue = remaining / (subGroups - i);
+        if (averageValue == 0) {
+            arr[i] = 0;
+            continue;
+        }
+
+        randomAmmount = rand() % averageValue;
         remaining -= randomAmmount;
+        
         arr[i] = randomAmmount;
     }
 
-    arr[subgroups - 1] = remaining;
+    arr[subGroups - 1] = remaining;
 }
 
 int getSeconds(double timeInSeconds) {

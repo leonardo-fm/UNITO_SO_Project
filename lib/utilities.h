@@ -10,7 +10,7 @@ Coordinates getRandomCoordinates(int maxX, int maxY);
 Coordinates getCornerCoordinates(int maxX, int maxY, int num);
 
 int getRandomValue(int min, int max);
-void generateSubgroupSums(int *arr, int totalNumber, int subgroups);
+void generateSubgroupSums(int *arr, int totalNumber, int subGroups);
 
 int getSeconds(double timeInSeconds);
 long getNanoSeconds(double timeInSeconds);
