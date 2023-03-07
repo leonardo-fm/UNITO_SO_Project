@@ -769,7 +769,6 @@ int sellGoods() {
             }
 
             /* Send sell report to the port */
-            printf("Sended exchange %d\n", exchange);
             if (sendMessage(writingMsgQueue, PA_SE_SUMMARY, i, exchange) == -1) {
                 handleErrorId("Failed to send PA_SE_SUMMARY comunication", boat->id);
                 return -1;

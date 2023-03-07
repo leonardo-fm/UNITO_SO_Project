@@ -50,7 +50,7 @@ int currentProcessId;
 int simulationFinishedEarly = 0;
 
 void handle_master_stopProcess() {
-    
+
     /* Block all incoming signals after the first SIGINT */
     sigset_t mask;
     sigfillset(&mask);
@@ -84,7 +84,6 @@ int main() {
     }
 
     initializeEnvironment();
-    initializeSingalsMask();
     initializeSingalsHandlers();
     if (loadConfig(configSharedMemoryId) == -1) {
         safeExit(3);
@@ -230,6 +229,8 @@ int main() {
         safeExit(22);
     }
 
+    /* Init mask after fork to avoid to copy master options */
+    initializeSingalsMask();
 
     /* ----- START SIMULATION ----- */
     if (work() == -1) {
@@ -241,6 +242,19 @@ int main() {
     }
 
     return 0;
+}
+
+void initializeSingalsMask() {
+
+    sigset_t sigMask;
+
+    /* Mask all signals except SIGINT */
+    sigfillset(&sigMask);
+    sigdelset(&sigMask, SIGINT);
+    sigprocmask(SIG_SETMASK, &sigMask, NULL);
+
+    /* If i don't set the group it will not register the ctrl + c in the console */
+    setpgid(getpid(), getppid());
 }
 
 int initializeSingalsHandlers() {
@@ -374,19 +388,6 @@ int acknowledgeChildrenStatus(int checkAll) {
     return 0;
 }
 
-void initializeSingalsMask() {
-
-    sigset_t sigMask;
-
-    /* Mask all signals except SIGINT */
-    sigfillset(&sigMask);
-    sigdelset(&sigMask, SIGINT);
-    sigprocmask(SIG_SETMASK, &sigMask, NULL);
-
-    /* If i don't set the group it will not register the ctrl + c in the console */
-    setpgid(getpid(), getppid());
-}
-
 int work() {
 
     int simulationDays = 0;
@@ -468,6 +469,7 @@ int work() {
             /* Stop all */
             killpg(getpid(), SIGUSR1);
             killpg(getpid(), SIGCONT);
+
             debug("Sended stop all the process");
 
             if (acknowledgeChildrenStatus(0) == -1) {

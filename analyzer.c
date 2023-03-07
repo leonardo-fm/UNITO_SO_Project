@@ -130,6 +130,7 @@ int initializeSingalsHandlers() {
     masterPid = getppid();
 
     signal(SIGUSR2, handle_analyzer_simulation_signals);
+    signal(SIGINT, handle_analyzer_stopProcess);
 
     return 0;
 }
@@ -638,8 +639,8 @@ int generateEndPortStat() {
         }
     }
 
-    fprintf(filePointer, "The port %d have sold %d lots of goods\n", portIdSold, totSold);
-    fprintf(filePointer, "The port %d have requested %d lots of goods\n", portIdReq, totReq);
+    fprintf(filePointer, "The port %d have sold %d lots (%d tons) of goods\n", portIdSold, totSold, configArr[SO_SIZE]);
+    fprintf(filePointer, "The port %d have requested %d lots (%d tons) of goods\n", portIdReq, totReq, configArr[SO_SIZE]);
 
     return 0;
 }

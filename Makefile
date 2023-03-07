@@ -9,7 +9,7 @@ LOG_FILE := log/log_$(shell date +%Y%m%d%H%M%S).txt
 # RELEASE section
 
 run: build
-	clear 
+	clear
 	./bin/master
 
 build: master nave porto analyzer meteo
@@ -32,7 +32,7 @@ meteo: meteo.c
 # DEBUG Section
 
 debug: build-d
-	clear 
+	clear
 	./bin/master
 
 build-d: master_d nave_d porto_d analyzer_d meteo_d
