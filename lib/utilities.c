@@ -27,8 +27,8 @@ void initializeEnvironment() {
 Coordinates getRandomCoordinates(int maxX, int maxY) {
 
     Coordinates coordinates;
-    coordinates.x = (double)rand() / (RAND_MAX / maxX);
-    coordinates.y = (double)rand() / (RAND_MAX / maxY);
+    coordinates.x = (double) rand() / (RAND_MAX / maxX);
+    coordinates.y = (double) rand() / (RAND_MAX / maxY);
     return coordinates;
 }
 
@@ -114,6 +114,10 @@ int safeWait(int timeToSleepSec, long timeToSleepNs) {
 
     waitTime.tv_sec = timeToSleepSec;
     waitTime.tv_nsec = timeToSleepNs;
+
+    if (simulationFinished == 1) {
+        return 0;
+    }
 
     do {
         /* Reset errno error */

@@ -31,11 +31,11 @@ meteo: meteo.c
 
 # DEBUG Section
 
-debug: build-debug
+debug: build-d
 	clear 
 	./bin/master
 
-build-debug: master_d nave_d porto_d analyzer_d meteo_d
+build-d: master_d nave_d porto_d analyzer_d meteo_d
 
 master_d: master.c
 	gcc $(CFLAGS) $(CDFLAGS) $(SFLAGS) -o bin/master master.c $(LFLAGS) -lm -pthread

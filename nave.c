@@ -41,9 +41,6 @@ int currentPort = -1;
 int readingMsgQueue = -1;
 int writingMsgQueue = -1;
 
-/* No value equal to -1, o to n is the good id is selling */
-int currentSellingGood = -1;
-
 Boat *boat;
 Goods *goodHold;
 
@@ -280,7 +277,7 @@ int initializeBoat(char *boatIdS, char *portSharedMemoryIdS, char *boatSharedMem
 
     boatArr[referenceId].id = strtol(boatIdS, &p, 10);
     boatArr[referenceId].pid = getpid();
-    boatArr[referenceId].capacityInLot = floor((double)configArr[S0_CAPACITY] / configArr[SO_SIZE]);
+    boatArr[referenceId].capacityInLot = floor((double) configArr[S0_CAPACITY] / configArr[SO_SIZE]);
     boatArr[referenceId].position = getRandomCoordinates(configArr[SO_LATO], configArr[SO_LATO]);
     boatArr[referenceId].state = In_Sea_Empty;
 
@@ -428,8 +425,7 @@ int newDay() {
     for (i = 0; i < configArr[SO_MERCI]; i++) {
         if(goodHold[i].remaningDays > 0) {
             goodHold[i].remaningDays--;
-            /* Avoid adding sold expired good */
-            if (goodHold[i].remaningDays == 0 && currentSellingGood != i) {
+            if (goodHold[i].remaningDays == 0) {
                 goodHold[i].state = Expired_In_The_Boat;
 
                 sem_wait(endGoodDumpSemaphore);
@@ -555,7 +551,7 @@ int openTrade() {
 int trade() {
 
     if (haveIGoodsToSell() == 0 && status != Es_Finish_Simulation) {
-        
+
         debugId("Start sell", boat->id);
         if (sellGoods() == -1) {
             handleErrorId("Error during selling goods", boat->id);
@@ -722,6 +718,11 @@ int sellGoods() {
 
     /* Sell all available goods */
     for (i = 0; i < configArr[SO_MERCI]; i++) {
+
+        if (simulationFinished == 1) {
+            break;
+        }
+
         if (goodHold[i].goodLots > 0 && goodHold[i].state != Expired_In_The_Boat && boat->state == In_Port_Exchange) {
 
             int exchange = 0;
@@ -733,7 +734,6 @@ int sellGoods() {
             }
             
             sem_wait(semaphore);
-            currentSellingGood = i;
 
             /* If x >= 0 OK, x < 0 not enought good to sell */
             if (goodArr[i].goodLots - goodHold[i].goodLots >= 0) {
@@ -757,10 +757,9 @@ int sellGoods() {
                 goodArr[i].state = In_The_Port;
             }
 
-            currentSellingGood = -1;
             sem_post(semaphore);
 
-            loadTonPerDay = (double) exchange / configArr[SO_LOADSPEED];
+            loadTonPerDay = (double) (exchange * configArr[SO_SIZE]) / configArr[SO_LOADSPEED];
             waitTimeNs = getNanoSeconds(loadTonPerDay);
             waitTimeS = getSeconds(loadTonPerDay);
 
@@ -770,6 +769,7 @@ int sellGoods() {
             }
 
             /* Send sell report to the port */
+            printf("Sended exchange %d\n", exchange);
             if (sendMessage(writingMsgQueue, PA_SE_SUMMARY, i, exchange) == -1) {
                 handleErrorId("Failed to send PA_SE_SUMMARY comunication", boat->id);
                 return -1;
@@ -850,11 +850,16 @@ int buyGoods() {
     }
 
     /* Buy some available goods */
-    lotsPerGood = floor((double)getSpaceAvailableInTheHold() / configArr[SO_MERCI]);
+    lotsPerGood = floor((double) getSpaceAvailableInTheHold() / configArr[SO_MERCI]);
     spareLots = getSpaceAvailableInTheHold() % configArr[SO_MERCI];
     additionalLots = 0;
 
     for (i = 0; i < configArr[SO_MERCI]; i++) {
+        
+        if (simulationFinished == 1) {
+            break;
+        }
+
         if (goodArr[i].goodLots > 0 && goodArr[i].state != Expired_In_The_Port && boat->state == In_Port_Exchange) {
             
             int exchange;
@@ -897,7 +902,7 @@ int buyGoods() {
 
             sem_post(semaphore);
 
-            loadTonPerDay = (double)(exchange * configArr[SO_SIZE]) / configArr[SO_LOADSPEED];
+            loadTonPerDay = (double) (exchange * configArr[SO_SIZE]) / configArr[SO_LOADSPEED];
             waitTimeNs = getNanoSeconds(loadTonPerDay);
             waitTimeS = getSeconds(loadTonPerDay);
 
@@ -916,6 +921,7 @@ int buyGoods() {
                 break;
             }
         } else {
+
             additionalLots += lotsPerGood;
             if (spareLots-- > 0) {
                 additionalLots++;

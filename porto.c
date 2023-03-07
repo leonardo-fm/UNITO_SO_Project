@@ -28,11 +28,11 @@ goodDailyDump *goodDumpArr = 0;
 portDailyDump *portDumpArr = 0; 
 int *acknowledgeInitArr = 0;
 int *acknowledgeDumpArr = 0;
-goodEndDump *endGoodDumpArr = 0;
-sem_t *endGoodDumpSemaphore = 0; 
+goodEndDump *endGoodsDumpArr = 0;
+sem_t *endGoodsDumpSemaphore = 0; 
 
-InitGoods *goodMasterArr = 0;
-sem_t *goodMasterSemaphore = 0; 
+InitGoods *goodsMasterArr = 0;
+sem_t *goodsMasterSemaphore = 0; 
 
 Port *portArr = 0;
 Port *port = 0;
@@ -217,14 +217,14 @@ int initializeConfig(char *configSharedMemoryIdString, char *goodAnalyzerSharedM
         return -1;
     }
 
-    endGoodDumpArr = (goodEndDump*) shmat(endGoodSharedMemoryId, NULL, 0);
-    if (endGoodDumpArr == (void*) -1) {
+    endGoodsDumpArr = (goodEndDump*) shmat(endGoodSharedMemoryId, NULL, 0);
+    if (endGoodsDumpArr == (void*) -1) {
         handleErrnoId("shmat()", port->id);
         return -1;
     }
 
-    endGoodDumpSemaphore = sem_open(endGoodSharedMemoryIdS, O_EXCL, 0600, 1);
-    if (endGoodDumpSemaphore == SEM_FAILED) {
+    endGoodsDumpSemaphore = sem_open(endGoodSharedMemoryIdS, O_EXCL, 0600, 1);
+    if (endGoodsDumpSemaphore == SEM_FAILED) {
         handleErrnoId("sem_open()", port->id);
         return -1;
     }
@@ -235,14 +235,14 @@ int initializeConfig(char *configSharedMemoryIdString, char *goodAnalyzerSharedM
         return -1;
     }
 
-    goodMasterArr = (InitGoods*) shmat(goodMasterSharedMemoryId, NULL, 0);
-    if (goodMasterArr == (void*) -1) {
+    goodsMasterArr = (InitGoods*) shmat(goodMasterSharedMemoryId, NULL, 0);
+    if (goodsMasterArr == (void*) -1) {
         handleErrnoId("shmat()", port->id);
         return -1;
     }
 
-    goodMasterSemaphore = sem_open(goodMasterSharedMemoryIdS, O_EXCL, 0600, 1);
-    if (endGoodDumpSemaphore == SEM_FAILED) {
+    goodsMasterSemaphore = sem_open(goodMasterSharedMemoryIdS, O_EXCL, 0600, 1);
+    if (endGoodsDumpSemaphore == SEM_FAILED) {
         handleErrnoId("sem_open()", port->id);
         return -1;
     }
@@ -262,7 +262,7 @@ int initializePort(char *portIdString, char *portSharedMemoryIdS) {
         return -1;
     }
 
-    if (initializePortGoods() == -1) {
+    if (getPortGoods() == -1) {
         handleErrorId("Error occurred during init of goods", port->id);
         return -1;
     }
@@ -379,44 +379,51 @@ int initializeExchangeGoods() {
     return 0;
 }
 
-int initializePortGoods() {
+int getPortGoods() {
 
     int i, gotGoods = 0;
     
-    sem_wait(goodMasterSemaphore);
+    sem_wait(goodsMasterSemaphore);
     
     for (i = 0; i < configArr[SO_MERCI]; i++) {
         
         int stockOrRequest = getRandomValue(0, 1);
         int lotsToAdd;
 
-        if (goodMasterArr[i].defaultLotAmmount == 0 && goodMasterArr[i].spareLotAmmount == 0) {
+        if (goodsMasterArr[i].defaultLotAmmount == 0 && goodsMasterArr[i].spareLotAmmount == 0) {
             continue;
         }
 
         gotGoods = 1;
 
-        if (goodMasterArr[i].defaultLotAmmount > 0) {
-            lotsToAdd = goodMasterArr[i].defaultLot;
-            goodMasterArr[i].defaultLotAmmount--;
+        /* Dump overall data */
+        sem_wait(endGoodsDumpSemaphore);
+
+        if (goodsMasterArr[i].defaultLotAmmount > 0) {
+    
+            lotsToAdd = goodsMasterArr[i].defaultLot;
+            goodsMasterArr[i].defaultLotAmmount--;
+
+            endGoodsDumpArr[i].totalLotNumber += goodsMasterArr[i].defaultLot;
         } else {
-            lotsToAdd = goodMasterArr[i].spareLot;
-            goodMasterArr[i].spareLotAmmount--;
+    
+            lotsToAdd = goodsMasterArr[i].spareLot;
+            goodsMasterArr[i].spareLotAmmount--;
+
+            endGoodsDumpArr[i].totalLotNumber += goodsMasterArr[i].spareLot;
         }
 
         if (stockOrRequest == 0) {
             /* Fill stock */
-            goodStockArr[i].remaningDays = goodMasterArr[i].good.remaningDays;
+            goodStockArr[i].remaningDays = goodsMasterArr[i].good.remaningDays;
             goodStockArr[i].goodLots = lotsToAdd;
             goodRequestArr[i].goodLots = 0;
             goodStockArr[i].state = In_The_Port;
 
-            sem_wait(endGoodDumpSemaphore);
-            endGoodDumpArr[i].totalLotInitNumber += goodStockArr[i].goodLots;
-            sem_post(endGoodDumpSemaphore);
+            endGoodsDumpArr[i].inPort += goodStockArr[i].goodLots;
         } else {
             /* Fill request */
-            goodRequestArr[i].remaningDays = goodMasterArr[i].good.remaningDays;
+            goodRequestArr[i].remaningDays = goodsMasterArr[i].good.remaningDays;
             goodRequestArr[i].goodLots = lotsToAdd;
             goodStockArr[i].goodLots = 0;
             goodRequestArr[i].state = In_The_Port;
@@ -424,9 +431,11 @@ int initializePortGoods() {
 
         goodStockArr[i].dailyExchange = 0;
         goodRequestArr[i].dailyExchange = 0;
+
+        sem_post(endGoodsDumpSemaphore);
     }
 
-    sem_post(goodMasterSemaphore);
+    sem_post(goodsMasterSemaphore);
 
     if (gotGoods == 1) {
         debugId("Got goods for the port", port->id);
@@ -524,17 +533,17 @@ int work() {
             }
         }
 
-        for (j = 0; j < maxQauys; j++) {
+        for (i = 0; i < maxQauys; i++) {
 
             int readingMsgQueue, writingMsgQueue, msgStatus;
             PortMessage receivedMsg;
 
-            if (queues[0][j] == -1) {
+            if (queues[0][i] == -1) {
                 continue;
             }
 
-            readingMsgQueue = queues[0][j];
-            writingMsgQueue = queues[1][j];
+            readingMsgQueue = queues[0][i];
+            writingMsgQueue = queues[1][i];
 
             msgStatus = receiveMessage(readingMsgQueue, &receivedMsg, 0, 0);
 
@@ -544,7 +553,7 @@ int work() {
             }
 
             if (msgStatus == 0) {
-                
+
                 /* New message */
                 int acceptResponse;
                 switch (receivedMsg.msg.data.action)
@@ -556,8 +565,8 @@ int work() {
                             return -1;
                         };
                         if (acceptResponse == 1) {
-                            queues[0][j] = -1;
-                            queues[1][j] = -1;
+                            queues[0][i] = -1;
+                            queues[1][i] = -1;
                         }
                         break;
                     case PA_SE_GOOD:
@@ -589,8 +598,8 @@ int work() {
                             handleErrorId("Error during EOT handling", port->id);
                             return -1;
                         };
-                        queues[0][j] = -1;
-                        queues[1][j] = -1;
+                        queues[0][i] = -1;
+                        queues[1][i] = -1;
                         break;
                     default:
                         break;
@@ -606,13 +615,6 @@ int work() {
 
     free(queues[0]);
     free(queues[1]);
-
-    /* End good dump */
-    for (i = 0; i < configArr[SO_MERCI]; i++) {
-        sem_wait(endGoodDumpSemaphore);
-        endGoodDumpArr[i].inPort += goodStockArr[i].goodLots;
-        sem_post(endGoodDumpSemaphore);
-    }
 
     return 0;
 }
@@ -649,6 +651,7 @@ int freePendingMsgs() {
 }
 
 int dumpData() {
+
     int i, totalGoodInStock, totalGoodRequested, goodReferenceId, totalDailyGoodsSold, totalDailyGoodsRecived;
 
     goodDailyDump gdd;
@@ -718,7 +721,7 @@ int newDay() {
     
     int i;
         
-    if (initializePortGoods() == -1) {
+    if (getPortGoods() == -1) {
         handleErrorId("Error occurred during daily init of goods", port->id);
         return -1;
     }
@@ -730,9 +733,9 @@ int newDay() {
             if (goodStockArr[i].remaningDays == 0) {
                 goodStockArr[i].state = Expired_In_The_Port;
 
-                sem_wait(endGoodDumpSemaphore);
-                endGoodDumpArr[i].expiredInPort += goodStockArr[i].goodLots;
-                sem_post(endGoodDumpSemaphore);
+                sem_wait(endGoodsDumpSemaphore);
+                endGoodsDumpArr[i].expiredInPort += goodStockArr[i].goodLots;
+                sem_post(endGoodsDumpSemaphore);
             }
         }
 
@@ -814,9 +817,9 @@ int handlePA_RQ_SUMMARY(int goodId, int exchangeQuantity) {
 
     goodStockArr[goodId].dailyExchange += exchangeQuantity;
     
-    sem_wait(endGoodDumpSemaphore);
-    endGoodDumpArr[goodId].exchanged += exchangeQuantity;
-    sem_post(endGoodDumpSemaphore);
+    sem_wait(endGoodsDumpSemaphore);
+    endGoodsDumpArr[goodId].exchanged += exchangeQuantity;
+    sem_post(endGoodsDumpSemaphore);
 
     return 0;
 }
@@ -887,12 +890,12 @@ int cleanup() {
         return -1;
     }
      
-    if (endGoodDumpArr != 0 && shmdt(endGoodDumpArr) == -1) {
+    if (endGoodsDumpArr != 0 && shmdt(endGoodsDumpArr) == -1) {
         handleErrnoId("shmdt()", port->id);
         return -1;
     }
 
-    if (endGoodDumpSemaphore != 0 && sem_close(endGoodDumpSemaphore) == -1) {
+    if (endGoodsDumpSemaphore != 0 && sem_close(endGoodsDumpSemaphore) == -1) {
         handleErrnoId("shmdt()", port->id);
         return -1;
     }
@@ -942,7 +945,7 @@ int cleanup() {
         return -1;
     }
 
-    if (goodMasterArr != 0 && shmdt(goodMasterArr) == -1) {
+    if (goodsMasterArr != 0 && shmdt(goodsMasterArr) == -1) {
         handleErrnoId("shmdt()", port->id);
         return -1;
     }
