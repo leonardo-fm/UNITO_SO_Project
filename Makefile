@@ -4,12 +4,10 @@ CDFLAGS = -DDEBUG
 SFLAGS = -D_POSIX_C_SOURCE=200809L -D_XOPEN_SOURCE=500
 LFLAGS = lib/config.c lib/utilities.c lib/msgPortProtocol.c lib/customMacro.h
 
-LOG_FILE := log/log_$(shell date +%Y%m%d%H%M%S).txt
-
 # RELEASE section
 
 run: build
-	clear 
+	clear
 	./bin/master
 
 build: master nave porto analyzer meteo
@@ -31,11 +29,11 @@ meteo: meteo.c
 
 # DEBUG Section
 
-debug: build-debug
-	clear 
+debug: build-d
+	clear
 	./bin/master
 
-build-debug: master_d nave_d porto_d analyzer_d meteo_d
+build-d: master_d nave_d porto_d analyzer_d meteo_d
 
 master_d: master.c
 	gcc $(CFLAGS) $(CDFLAGS) $(SFLAGS) -o bin/master master.c $(LFLAGS) -lm -pthread

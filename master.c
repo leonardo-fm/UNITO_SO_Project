@@ -31,8 +31,8 @@ int boatSharedMemoryId = 0;
 
 int goodSharedMemoryId = 0;
 int *dailyLotDistributionArr = 0;
-InitGoods *initGoodArr = 0;
-sem_t *initGoodSemaphore = 0;
+InitGoods *initGoodsArr = 0;
+sem_t *initGoodsSemaphore = 0;
 
 int goodAnalyzerSharedMemoryId;
 int boatAnalyzerSharedMemoryId;
@@ -50,7 +50,7 @@ int currentProcessId;
 int simulationFinishedEarly = 0;
 
 void handle_master_stopProcess() {
-    
+
     /* Block all incoming signals after the first SIGINT */
     sigset_t mask;
     sigfillset(&mask);
@@ -84,7 +84,6 @@ int main() {
     }
 
     initializeEnvironment();
-    initializeSingalsMask();
     initializeSingalsHandlers();
     if (loadConfig(configSharedMemoryId) == -1) {
         safeExit(3);
@@ -161,8 +160,8 @@ int main() {
         safeExit(8);
     }
 
-    initGoodArr = (InitGoods*) shmat(goodSharedMemoryId, NULL, 0);
-    if (initGoodArr == (void*) -1) {
+    initGoodsArr = (InitGoods*) shmat(goodSharedMemoryId, NULL, 0);
+    if (initGoodsArr == (void*) -1) {
         handleErrno("shmat()");
         safeExit(23);
     }
@@ -173,7 +172,7 @@ int main() {
     }
 
     dailyLotDistributionArr = (int*) malloc(sizeof(int) * configArr[SO_DAYS]);
-    generateSubgroupSums(dailyLotDistributionArr, floor((double)configArr[SO_FILL] / configArr[SO_SIZE]), configArr[SO_DAYS]);
+    generateSubgroupSums(dailyLotDistributionArr, floor((double) configArr[SO_FILL] / configArr[SO_SIZE]), configArr[SO_DAYS]);
 
     if (generateGoods(0) == -1) {
         safeExit(9);
@@ -230,6 +229,8 @@ int main() {
         safeExit(22);
     }
 
+    /* Init mask after fork to avoid to copy master options */
+    initializeSingalsMask();
 
     /* ----- START SIMULATION ----- */
     if (work() == -1) {
@@ -241,6 +242,19 @@ int main() {
     }
 
     return 0;
+}
+
+void initializeSingalsMask() {
+
+    sigset_t sigMask;
+
+    /* Mask all signals except SIGINT */
+    sigfillset(&sigMask);
+    sigdelset(&sigMask, SIGINT);
+    sigprocmask(SIG_SETMASK, &sigMask, NULL);
+
+    /* If i don't set the group it will not register the ctrl + c in the console */
+    setpgid(getpid(), getppid());
 }
 
 int initializeSingalsHandlers() {
@@ -374,19 +388,6 @@ int acknowledgeChildrenStatus(int checkAll) {
     return 0;
 }
 
-void initializeSingalsMask() {
-
-    sigset_t sigMask;
-
-    /* Mask all signals except SIGINT */
-    sigfillset(&sigMask);
-    sigdelset(&sigMask, SIGINT);
-    sigprocmask(SIG_SETMASK, &sigMask, NULL);
-
-    /* If i don't set the group it will not register the ctrl + c in the console */
-    setpgid(getpid(), getppid());
-}
-
 int work() {
 
     int simulationDays = 0;
@@ -468,6 +469,7 @@ int work() {
             /* Stop all */
             killpg(getpid(), SIGUSR1);
             killpg(getpid(), SIGCONT);
+
             debug("Sended stop all the process");
 
             if (acknowledgeChildrenStatus(0) == -1) {
@@ -539,7 +541,7 @@ int work() {
 #else
         printConsole("Simulation finished");
 #endif
-    
+
     if (acknowledgeChildrenStatus(1) == -1) {
         handleError("Error while waiting for children to finish");
         return -1;
@@ -664,61 +666,81 @@ int generateSubProcesses(int nOfProcess, char *execFilePath, int includeProcedur
 /* Generate all the goods requested and initialize them */
 int generateGoods(int dayOfSimulation) {
 
-    int *randomGoodDistribution;
+    int *randomGoodsDistribution = 0;
     int randomPortNumber = getRandomValue(1, configArr[SO_PORTI]);
-    int i;
+    int i, j, expiredGoods = 0, currentGoodsNumber = 0;
 
-    randomGoodDistribution = (int*) malloc(sizeof(int) * configArr[SO_MERCI]);
-    memset(randomGoodDistribution, 0, sizeof(int) * configArr[SO_MERCI]);
+    /* Count how many goods are expired, to avoid refill them after first day */
+    if (dayOfSimulation != 0) {
+        for (i = 0; i < configArr[SO_MERCI]; i++) {
+            if (initGoodsArr[i].good.remaningDays <= 0) {
+                expiredGoods++;
+            }
+        }
+    }
+
+    currentGoodsNumber = configArr[SO_MERCI] - expiredGoods;
+
+    randomGoodsDistribution = (int*) malloc(sizeof(int) * currentGoodsNumber);
+    memset(randomGoodsDistribution, 0, sizeof(int) * currentGoodsNumber);
 
     /* TODO attualemente anche se una merce scade noi andiamo ad assegnarle un valore che ovviamente non verrà mai usato */
-    generateSubgroupSums(randomGoodDistribution, dailyLotDistributionArr[dayOfSimulation], configArr[SO_MERCI]);
+    generateSubgroupSums(randomGoodsDistribution, dailyLotDistributionArr[dayOfSimulation], currentGoodsNumber);
 
+    j = 0;
     for (i = 0; i < configArr[SO_MERCI]; i++) {
         
-        InitGoods initGood;
-        int lotsToSet = randomGoodDistribution[i];
+        InitGoods initGoods;
+        int lotsToSet = randomGoodsDistribution[j];
         
         /* Check first initialization */
         if (dayOfSimulation == 0) {
 
-            initGood.good.id = i;
-            initGood.good.goodLots = lotsToSet;
-            initGood.good.state = Undefined;
-            initGood.good.remaningDays = getRandomValue(configArr[SO_MIN_VITA], configArr[SO_MAX_VITA]);
+            initGoods.good.id = i;
+            initGoods.good.goodLots = lotsToSet;
+            initGoods.good.state = Undefined;
+            initGoods.good.remaningDays = getRandomValue(configArr[SO_MIN_VITA], configArr[SO_MAX_VITA]);
 
-            initGood.spareLot = floor((double)lotsToSet / configArr[SO_PORTI]) + 1;
-            initGood.spareLotAmmount = lotsToSet % configArr[SO_PORTI];
-            initGood.defaultLot = floor((double)lotsToSet / configArr[SO_PORTI]);
-            initGood.defaultLotAmmount = configArr[SO_PORTI] - (lotsToSet % configArr[SO_PORTI]);
+            initGoods.spareLot = floor((double) lotsToSet / configArr[SO_PORTI]) + 1;
+            initGoods.spareLotAmmount = lotsToSet % configArr[SO_PORTI];
+            initGoods.defaultLot = floor((double) lotsToSet / configArr[SO_PORTI]);
+            initGoods.defaultLotAmmount = configArr[SO_PORTI] - (lotsToSet % configArr[SO_PORTI]);
+
+            /* Go the the next value for the lots */
+            j++;
         } else {
             
-            initGood.good = initGoodArr[i].good;
+            initGoods.good = initGoodsArr[i].good;
             
-            if (initGood.good.remaningDays > 0) {
-            
-                initGood.good.goodLots = lotsToSet;
-                initGood.good.remaningDays--;
+            if (initGoods.good.remaningDays > 0) {
                 
-                initGood.spareLot = floor((double) lotsToSet / randomPortNumber) + 1;
-                initGood.spareLotAmmount = lotsToSet % randomPortNumber;
-                initGood.defaultLot = floor((double)lotsToSet / randomPortNumber);
-                initGood.defaultLotAmmount = randomPortNumber - (lotsToSet % randomPortNumber);
-            } else {
-            
-                initGood.good.goodLots = 0;
+                initGoods.good.goodLots = lotsToSet;
+                initGoods.good.remaningDays--;
+                
+                initGoods.spareLot = floor((double) lotsToSet / randomPortNumber) + 1;
+                initGoods.spareLotAmmount = lotsToSet % randomPortNumber;
+                initGoods.defaultLot = floor((double) lotsToSet / randomPortNumber);
+                initGoods.defaultLotAmmount = randomPortNumber - (lotsToSet % randomPortNumber);
 
-                initGood.spareLot = 0;
-                initGood.spareLotAmmount = 0;
-                initGood.defaultLot = 0;
-                initGood.defaultLotAmmount = 0;
+                /* Go the the next value for the lots */
+                j++;
+            } else {
+                
+                initGoods.good.goodLots = 0;
+
+                initGoods.spareLot = 0;
+                initGoods.spareLotAmmount = 0;
+                initGoods.defaultLot = 0;
+                initGoods.defaultLotAmmount = 0;
             }
         }
 
-        initGoodArr[i] = initGood;
+        initGoodsArr[i] = initGoods;
     }
 
-    free(randomGoodDistribution);
+    if (currentGoodsNumber != 0) {
+        free(randomGoodsDistribution);
+    }
 
 #ifdef DEBUG
     if (1 == 1) {
@@ -727,9 +749,9 @@ int generateGoods(int dayOfSimulation) {
 
         for (i = 0; i < configArr[SO_MERCI]; i++)
         {
-            snprintf(buffer, sizeof(buffer), "Good %d: %d ammount d: %d s: %d", i, initGoodArr[i].good.goodLots, initGoodArr[i].defaultLotAmmount, initGoodArr[i].spareLotAmmount);
+            snprintf(buffer, sizeof(buffer), "Good %d: %d ammount d: %d s: %d", i, initGoodsArr[i].good.goodLots, initGoodsArr[i].defaultLotAmmount, initGoodsArr[i].spareLotAmmount);
             debug(buffer);
-            totalLotsDistributed += initGoodArr[i].good.goodLots;
+            totalLotsDistributed += initGoodsArr[i].good.goodLots;
         }
 
         snprintf(buffer, sizeof(buffer), "Lots distributed: %d/%d for %d", totalLotsDistributed, dailyLotDistributionArr[dayOfSimulation], randomPortNumber);
@@ -754,7 +776,7 @@ int cleanup() {
         return -1;
     }
 
-    if (initGoodArr != 0 && shmdt(initGoodArr) == -1) {
+    if (initGoodsArr != 0 && shmdt(initGoodsArr) == -1) {
         handleErrno("shmdt()");
         return -1;
     }
@@ -764,7 +786,7 @@ int cleanup() {
         return -1;
     }
 
-    if (initGoodSemaphore != 0 && sem_close(initGoodSemaphore) == -1) {
+    if (initGoodsSemaphore != 0 && sem_close(initGoodsSemaphore) == -1) {
         handleErrno("sem_close()");
         return -1;
     }

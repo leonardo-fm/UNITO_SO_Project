@@ -6,7 +6,7 @@ int initializeConfig(char *configSharedMemoryIdString, char *goodAnalyzerSharedM
 int initializePort(char *portIdString, char *portSharedMemoryIdS);
 int initializePortStruct(char *portIdString, char *portSharedMemoryIdS);
 int initializeExchangeGoods();
-int initializePortGoods();
+int getPortGoods();
 int handleSwell();
 int waitForSwell();
 int work();

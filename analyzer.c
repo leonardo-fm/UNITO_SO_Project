@@ -130,6 +130,7 @@ int initializeSingalsHandlers() {
     masterPid = getppid();
 
     signal(SIGUSR2, handle_analyzer_simulation_signals);
+    signal(SIGINT, handle_analyzer_stopProcess);
 
     return 0;
 }
@@ -320,6 +321,11 @@ int work() {
             return -1;
         }
     }
+
+    if (checkDataDump() == -1) {
+        handleError("Error while check data dump");
+        return -1;
+    }
     
     if (generateEndDump() == -1) {
         handleError("Error while end dump");
@@ -422,7 +428,10 @@ int generateDailyDump() {
 
 int generateDailyHeader() {
 
-    fprintf(filePointer, "Day: %d\n\n", currentDay);
+    if (currentDay != 0) {
+        fprintf(filePointer, "\n");    
+    }
+    fprintf(filePointer, "*** Day: %d ***\n\n", currentDay);
 
     return 0;
 }
@@ -478,7 +487,14 @@ int generateDailyBoatReport() {
 
     /* Aggregate data */
     for (i = 0; i < configArr[SO_NAVI]; i++) {
-        boatStatus[boatDumpArr[i].boatState]++;
+
+        if (boatDumpArr[i].id == 0) {
+            continue;
+        }
+
+        if (boatDumpArr[i].boatState != Sunk) {
+            boatStatus[boatDumpArr[i].boatState]++;
+        }
         boatHitByStorm += boatDumpArr[i].storm;
         boatSunk += boatDumpArr[i].malestorm;
     }
@@ -490,6 +506,7 @@ int generateDailyBoatReport() {
     fprintf(filePointer, "\n");
 
     /* Cleaning of the memory after analyzing data */
+    
     memset(boatDumpArr, 0, sizeof(boatDailyDump) * configArr[SO_NAVI]);
 
     totalBoatSunk += boatSunk;
@@ -585,7 +602,7 @@ int generateEndDump() {
 
 int generateEndHeader() {
 
-    fprintf(filePointer, "End of simulation\n\n");
+    fprintf(filePointer, "\n*** End of simulation ***\n\n");
 
     return 0;
 }
@@ -595,9 +612,9 @@ int generateEndGoodReport() {
     int i;    
 
     /* Print data */
-    fprintf(filePointer, "%-12s%-12s%-12s%-12s%-12s%-12s\n", "GOOD_ID", "INIT_TOTAL", "IN_PORT", "E_IN_PORT", "E_IN_BOAT", "EXCHANGED");
+    fprintf(filePointer, "%-12s%-12s%-12s%-12s%-12s%-12s\n", "GOOD_ID", "TOTAL", "IN_PORT", "E_IN_PORT", "E_IN_BOAT", "EXCHANGED");
     for (i = 0; i < configArr[SO_MERCI]; i++) {
-        fprintf(filePointer, "%-12d%-12d%-12d%-12d%-12d%-12d\n", i, endGoodArr[i].totalLotInitNumber, endGoodArr[i].inPort,
+        fprintf(filePointer, "%-12d%-12d%-12d%-12d%-12d%-12d\n", i, endGoodArr[i].totalLotNumber, endGoodArr[i].inPort,
             endGoodArr[i].expiredInPort, endGoodArr[i].expiredInBoat, endGoodArr[i].exchanged);
     }
     fprintf(filePointer, "\n");
@@ -622,8 +639,8 @@ int generateEndPortStat() {
         }
     }
 
-    fprintf(filePointer, "The port %d have sold %d lot of goods\n", portIdSold, totSold);
-    fprintf(filePointer, "The port %d have requested %d lot of goods\n", portIdReq, totReq);
+    fprintf(filePointer, "The port %d have sold %d lots (%d tons) of goods\n", portIdSold, totSold, configArr[SO_SIZE]);
+    fprintf(filePointer, "The port %d have requested %d lots (%d tons) of goods\n", portIdReq, totReq, configArr[SO_SIZE]);
 
     return 0;
 }

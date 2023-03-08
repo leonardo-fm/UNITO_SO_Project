@@ -133,7 +133,7 @@ typedef struct {
 } portDailyDump;
 
 typedef struct {
-    int totalLotInitNumber;
+    int totalLotNumber;
     int inPort;
     int expiredInPort;
     int expiredInBoat;
