@@ -35,6 +35,12 @@ int loadConfig(int configSharedMemoryId) {
         char *p;
 
         if (fgets(fileLine, 150, filePointer) == NULL) {
+            
+            /* Check if the file is finish or an error occured */
+            if (errno == 0) {
+                break;
+            }
+
             handleErrno("fgets()");
             return -1;
         }
